@@ -38,7 +38,7 @@
   function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* storage unavailable: keep going */ } }
 
   var state = load() || freshState();
-  var ui = { selected: null, locking: false, timer: null, timerTick: 0, drawer: false, armed: null, armTimer: 0, sim: null, simResult: null, shownScores: {} };
+  var ui = { selected: null, locking: false, justPlaced: null, timer: null, timerTick: 0, drawer: false, armed: null, armTimer: 0, sim: null, simResult: null, shownScores: {} };
 
   /* ------------------------------------------------------------------ helpers */
   function esc(s) {
@@ -282,13 +282,91 @@
           (teamsLocked ? '<span class="muted" style="font-size:14px">Names can change at any time. To add or remove teams, reset everything first.</span>' : "") + "</div></div>" +
         '<div class="card" style="display:grid;gap:18px"><h2 style="font-size:26px">How to run it</h2><ol class="steps">' +
           "<li><div><b>Name the teams.</b><span class=\"muted\">Each decision goes to the next team in turn. One student per team comes up to choose.</span></div></li>" +
-          "<li><div><b>Before the lecture: Eid Ticket Rush.</b><span class=\"muted\">Six decisions where gut feeling lies. The answers are revealed only after the last pick.</span></div></li>" +
+          "<li><div><b>Before the lecture: Eid Ticket Rush.</b><span class=\"muted\">Teams build a ticket system part by part. The blueprint is graded only once every part is in.</span></div></li>" +
           "<li><div><b>Teach Lecture 2.</b><span class=\"muted\">Every warm-up answer points to the slides that explain it.</span></div></li>" +
-          "<li><div><b>After the lecture: Result Day.</b><span class=\"muted\">Eight harder decisions, then a live simulation of the class’s design, a mark sheet, and the answers.</span></div></li>" +
+          "<li><div><b>After the lecture: Result Day.</b><span class=\"muted\">Eight harder parts for a result portal, then a live simulation of the class’s design, a mark sheet, and the answers.</span></div></li>" +
         "</ol>" +
         '<div class="row"><button class="btn btn-danger btn-sm' + (ui.armed === "reset-all" ? " armed" : "") + '" data-act="reset-all">' +
           (ui.armed === "reset-all" ? "Click again to erase all picks and scores" : "Reset everything") + "</button></div></div>" +
       "</div></section>";
+  }
+
+  /* ---------- blueprint ---------- */
+  var I = window.ARENA_ICONS;
+  var VERDICT_CLASS = { correct: "v-good", partial: "v-half", trap: "v-bad", wrong: "v-bad" };
+  var VERDICT_ICON = { correct: "check", partial: "minus", trap: "x", wrong: "x" };
+
+  function blueprintHTML(rid, mode) {
+    var Rd = R(rid), bp = Rd.blueprint, r = state.rounds[rid], qs = Rd.questions;
+    var pos = {}, isNode = {};
+    bp.nodes.forEach(function (n) { pos[n.id] = n; isNode[n.id] = true; });
+    Object.keys(bp.slots).forEach(function (id) { pos[id] = bp.slots[id]; });
+    function ready(id) { return isNode[id] || !!r.picks[id]; }
+    var lines = bp.links.map(function (l) {
+      var a = pos[l[0]], b = pos[l[1]], on = ready(l[0]) && ready(l[1]);
+      return '<line class="bp-link' + (l[2] ? " " + l[2] : "") + (on ? " on" : "") + '" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '"/>';
+    }).join("");
+    var nodes = bp.nodes.map(function (n) {
+      return '<div class="bp-node" style="left:' + n.x + "%;top:" + n.y + '%">' + I.svg(n.icon) + "<span>" + esc(n.label) + "</span></div>";
+    }).join("");
+    var slots = qs.map(function (q, i) {
+      var p = r.picks[q.id], s = bp.slots[q.id];
+      var current = mode === "play" && r.stage === "play" && i === r.q && !p;
+      var st = p ? "filled" : current ? "current" : "empty";
+      var t = p ? team(p.team) : current ? turnTeam(rid, i) : null;
+      var o = p ? optionOf(q, p.opt) : (current && ui.selected ? optionOf(q, ui.selected) : null);
+      var graded = p && (mode === "graded" || mode === "reveal") && i < r.revealed;
+      var cls = "bp-slot " + st + (t ? " t-" + t.color : "") + (current && o ? " preview" : "") + (ui.justPlaced === q.id ? " placed" : "") +
+        (graded ? " " + VERDICT_CLASS[o.verdict] : "") + (mode === "reveal" && i === r.revealIdx ? " focus" : "");
+      var sub = p ? esc(q.slot) : current ? (o ? "Ready to lock in" : "Choosing now…") : "Part " + (i + 1);
+      return '<div class="' + cls + '" data-slot="' + q.id + '" style="left:' + s.x + "%;top:" + s.y + '%">' +
+        '<span class="bp-num">' + (i + 1) + "</span>" +
+        '<span class="bp-ico">' + I.svg(o ? o.icon : q.slotIcon) + "</span>" +
+        '<span class="bp-txt"><b>' + esc(o ? o.name : q.slot) + "</b><small>" + sub + "</small></span>" +
+        (graded ? '<span class="bp-mark">' + I.svg(VERDICT_ICON[o.verdict], "ico", 3) + "</span>" : "") +
+        (p && t && !graded ? '<span class="bp-team">' + initial(t) + "</span>" : "") +
+        "</div>";
+    }).join("");
+    return '<div class="bp"><svg class="bp-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">' + lines + "</svg>" + nodes + slots + "</div>";
+  }
+
+  function blueprintPanel(rid, mode, caption, footer) {
+    var Rd = R(rid), r = state.rounds[rid], n = Rd.questions.length, placed = Object.keys(r.picks).length;
+    var right = mode === "graded" || mode === "reveal"
+      ? Math.min(r.revealed, n) + " / " + n + " graded"
+      : placed + " / " + n + " parts";
+    return '<aside class="card bp-panel"><div class="bp-head"><div><span class="eyebrow">Blueprint</span><b>' + esc(Rd.blueprint.title) + "</b></div>" +
+      '<span class="bp-count">' + right + "</span></div>" + blueprintHTML(rid, mode) +
+      (caption ? '<p class="bp-caption">' + caption + "</p>" : "") + (footer || "") + "</aside>";
+  }
+
+  /* ---------- part cards ---------- */
+  function partHTML(rid, q, o, opt) {
+    opt = opt || {};
+    var t = opt.team;
+    var cls = "part";
+    if (opt.selected && t) cls += " selected t-" + t.color;
+    if (opt.placed) cls += " placed";
+    if (opt.dim) cls += " dim";
+    if (opt.pickedBy) cls += " mine t-" + opt.pickedBy.color;
+    var badge = "";
+    if (opt.reveal) {
+      cls += " " + VERDICT_CLASS[o.verdict] + (o.verdict === "trap" ? " v-trap" : "");
+      if (o.verdict === "correct") badge = '<span class="badge best">Best part</span>';
+      else if (o.verdict === "partial") badge = '<span class="badge half">Half right</span>';
+      else if (o.verdict === "trap") badge = '<span class="badge gut">Gut feeling</span>';
+    }
+    var by = opt.pickedBy ? '<span class="picked-by t-' + opt.pickedBy.color + '">' + avatar(opt.pickedBy) + esc(opt.pickedBy.name) +
+      (opt.reveal ? '<span class="points-pop' + (opt.pts ? "" : " zero") + '">+' + opt.pts + "</span>" : "") + "</span>" : "";
+    var inner = by + badge +
+      '<span class="part-key">' + (opt.placed ? "Placed" : o.key) + "</span>" +
+      '<span class="part-icon">' + I.svg(o.icon) + "</span>" +
+      '<span class="part-name">' + esc(o.name) + "</span>" +
+      '<span class="part-desc">' + esc(o.text) + "</span>" +
+      (opt.reveal ? '<span class="part-why">' + I.svg(VERDICT_ICON[o.verdict], "ico", 3) + "<span>" + esc(o.why) + "</span></span>" : "");
+    if (opt.static) return '<div class="' + cls + '">' + inner + "</div>";
+    return '<button class="' + cls + '" data-act="select" data-key="' + o.key + '"' + (opt.disabled ? " disabled" : "") +
+      ' aria-pressed="' + !!opt.selected + '" aria-label="' + esc(o.key + ": " + o.name + ". " + o.text) + '">' + inner + "</button>";
   }
 
   /* ---------- intro ---------- */
@@ -301,47 +379,24 @@
   function introHTML(rid) {
     var Rd = R(rid), r = state.rounds[rid];
     var started = Object.keys(r.picks).length > 0;
-    var order = Rd.questions.map(function (q, i) { return turnTeam(rid, i); });
     var seen = [], orderChips = "";
-    order.forEach(function (t) { if (seen.indexOf(t.id) < 0) { seen.push(t.id); orderChips += '<span class="team-chip t-' + t.color + '">' + avatar(t) + esc(t.name) + "</span>"; } });
+    Rd.questions.forEach(function (q, i) {
+      var t = turnTeam(rid, i);
+      if (seen.indexOf(t.id) < 0) { seen.push(t.id); orderChips += '<span class="team-chip t-' + t.color + '">' + avatar(t) + esc(t.name) + "</span>"; }
+    });
     return '<section class="screen"><div class="intro">' +
       '<div class="card" style="display:grid;gap:18px">' +
         '<span class="eyebrow">' + esc(Rd.kicker) + " · " + esc(Rd.when) + "</span>" +
         "<h1>" + esc(Rd.name) + "</h1>" +
         '<p class="lead">' + esc(Rd.story) + "</p>" +
+        factsHTML(rid) +
         '<div class="turn-order"><span class="muted" style="font-weight:700">Turn order:</span>' + orderChips + "</div>" +
-        '<p class="muted" style="font-size:14px">Scoring: ' + POINTS[rid].correct + " points for the best choice, " + POINTS[rid].partial + " for a half-right one, 0 for the rest.</p>" +
-        '<div class="row"><button class="btn btn-lg" data-act="start-round">' + (started ? "Continue the round" : "Start the round") + ICON.arrow + "</button>" +
+        '<p class="muted" style="font-size:14px">Scoring: ' + POINTS[rid].correct + " points for the best part, " + POINTS[rid].partial + " for a half-right part, 0 for the rest.</p>" +
+        '<div class="row"><button class="btn btn-lg" data-act="start-round">' + (started ? "Continue building" : "Start building") + ICON.arrow + "</button>" +
         '<button class="btn btn-ghost" data-act="home">' + ICON.back + "Back</button></div>" +
       "</div>" +
-      '<div class="card" style="display:grid;gap:14px"><span class="eyebrow">The facts</span>' + factsHTML(rid) +
-        (rid === "final" ? '<p class="muted" style="font-size:14px">Open these at any time with the <b>Facts</b> button at the top.</p>' : "") + "</div>" +
+      blueprintPanel(rid, "intro", "Each decision fills one slot. By the end of the round, your class has designed the whole system.") +
       "</div></section>";
-  }
-
-  /* ---------- question pieces ---------- */
-  function highlightCode(src) {
-    return esc(src)
-      .replace(/(&quot;[^&]*?&quot;)/g, '<span class="str">$1</span>')
-      .replace(/\b(if|elif|else|GET|return)\b/g, '<span class="kw">$1</span>');
-  }
-
-  function extrasHTML(q) {
-    var h = "";
-    if (q.chips) h += '<div class="chips">' + q.chips.map(function (c) { return '<span class="chip">' + esc(c) + "</span>"; }).join("") + "</div>";
-    if (q.formula) h += '<div class="formula">' + esc(q.formula) + "</div>";
-    if (q.table) {
-      h += '<div><div class="table-wrap"><table class="cmp"><thead><tr>' + q.table.head.map(function (c) { return "<th>" + esc(c) + "</th>"; }).join("") + "</tr></thead><tbody>" +
-        q.table.rows.map(function (r) { return "<tr>" + r.map(function (c) { return "<td>" + esc(c) + "</td>"; }).join("") + "</tr>"; }).join("") +
-        "</tbody></table></div>" + (q.table.note ? '<div class="table-note">' + esc(q.table.note) + "</div>" : "") + "</div>";
-    }
-    if (q.chain) {
-      h += '<div style="display:grid;gap:8px"><div class="chain">' + q.chain.map(function (n, i) {
-        return (i ? '<span class="chain-arrow"></span>' : "") + '<div class="chain-node"><b>' + esc(n.name) + "</b><span>" + esc(n.a) + "</span>" + (n.note ? "<small>" + esc(n.note) + "</small>" : "") + "</div>";
-      }).join("") + '</div><div class="chain-total">' + esc(q.chainTotal) + "</div></div>";
-    }
-    if (q.code) h += '<pre class="code">' + highlightCode(q.code) + "</pre>";
-    return h;
   }
 
   /* ---------- play ---------- */
@@ -350,31 +405,30 @@
     var t = turnTeam(rid, i);
     var pick = r.picks[q.id];
     var sel = pick ? pick.opt : ui.selected;
-    var opts = q.options.map(function (o) {
-      var isSel = sel === o.key;
-      return '<button class="option' + (isSel ? " selected t-" + t.color : (sel && ui.locking ? " dim" : "")) + '" data-act="select" data-key="' + o.key + '"' +
-        (ui.locking ? " disabled" : "") + ' aria-pressed="' + isSel + '"><span class="letter">' + o.key + "</span><span>" + esc(o.text) + "</span></button>";
+    var parts = q.options.map(function (o) {
+      return partHTML(rid, q, o, {
+        team: t, selected: sel === o.key, disabled: ui.locking,
+        placed: ui.locking && pick && pick.opt === o.key, dim: ui.locking && sel && sel !== o.key
+      });
     }).join("");
-    var stamp = "";
-    if (ui.locking && pick) {
-      stamp = '<div class="stamp-layer t-' + t.color + '"><div class="stamp">Locked in!<small>' + esc(t.name) + " chose " + pick.opt + "</small></div></div>";
-    }
-    return '<section class="screen q-' + q.quality + '">' +
+    var selOpt = sel ? optionOf(q, sel) : null;
+    var lockLabel = ui.locking ? "Placed!" : selOpt ? "Lock in “" + esc(selOpt.name) + "”" : "Pick a part first";
+    var footer = '<div class="bp-actions"><button class="btn btn-lg btn-team t-' + t.color + '" data-act="lock"' + (!sel || ui.locking ? " disabled" : "") + ">" + ICON.lock + "<span>" + lockLabel + "</span></button>" +
+      (r.order.length ? '<button class="btn btn-ghost btn-sm" data-act="undo"' + (ui.locking ? " disabled" : "") + ">" + ICON.undo + "Undo last part</button>" : "") + "</div>";
+    return '<section class="screen q-' + q.quality + '"><div class="play-grid"><div class="play-main">' +
       '<div class="turn-banner t-' + t.color + '">' + avatar(t) +
-        '<div class="who"><b>Team ' + esc(t.name) + ", your turn</b><span>Send one person up to choose. Decision " + (i + 1) + " of " + qs.length + ".</span></div>" +
+        '<div class="who"><b>Team ' + esc(t.name) + ", your turn</b><span>Send one person up to choose the next part.</span></div>" +
         '<div style="display:grid;justify-items:center;gap:2px"><button class="timer" data-act="timer" aria-label="Start or stop the 60 second timer"></button><span class="timer-label">Timer</span></div>' +
       "</div>" +
       '<article class="card question">' +
-        '<div class="row between">' + qtag(q.quality) + '<span class="mono muted" style="font-size:14px">Decision ' + (i + 1) + " / " + qs.length + "</span></div>" +
+        '<div class="row between"><span class="slot-label">' + I.svg(q.slotIcon) + "Part " + (i + 1) + " of " + qs.length + ": " + esc(q.slot) + "</span>" + qtag(q.quality) + "</div>" +
         "<h2>" + esc(q.title) + "</h2>" +
         '<p class="prompt">' + esc(q.prompt) + "</p>" +
-        extrasHTML(q) +
-        '<div class="options">' + opts + "</div>" +
-        '<div class="lock-bar"><span class="hint"><span class="kbd">A</span>–<span class="kbd">D</span> to choose, <span class="kbd">Enter</span> to lock in. No answers until every decision is locked.</span>' +
-          '<div class="row">' + (r.order.length ? '<button class="btn btn-ghost" data-act="undo"' + (ui.locking ? " disabled" : "") + ">" + ICON.undo + "Undo last pick</button>" : "") +
-          '<button class="btn btn-lg btn-team t-' + t.color + '" data-act="lock"' + (!sel || ui.locking ? " disabled" : "") + ">" + ICON.lock + "Lock in" + (sel ? " " + sel : "") + "</button></div></div>" +
-        stamp +
-      "</article></section>";
+        '<div class="parts">' + parts + "</div>" +
+        '<div class="lock-bar"><span class="hint"><span class="kbd">A</span>–<span class="kbd">D</span> to choose, <span class="kbd">Enter</span> to lock it into the blueprint. Answers stay hidden until the blueprint is finished.</span></div>' +
+      "</article></div>" +
+      blueprintPanel(rid, "play", null, footer) +
+      "</div></section>";
   }
 
   /* ---------- timer ---------- */
@@ -393,21 +447,24 @@
 
   /* ---------- done ---------- */
   function doneHTML(rid) {
-    var r = state.rounds[rid], Rd = R(rid), n = Rd.questions.length;
-    var cards = Rd.questions.map(function (q, i) {
+    var r = state.rounds[rid], Rd = R(rid);
+    var list = Rd.questions.map(function (q) {
       var p = r.picks[q.id], t = team(p.team) || state.teams[0], o = optionOf(q, p.opt);
-      return '<div class="locked-card q-' + q.quality + '" style="animation-delay:' + (i * 0.05) + 's"><div class="row between"><span class="n">#' + (i + 1) + "</span>" + qtag(q.quality) + "</div>" +
-        "<h3>" + esc(q.title) + '</h3><div class="pick"><span class="letter-sm t-' + t.color + '">' + p.opt + "</span>" + esc(t.name) + "</div>" +
-        '<div class="muted" style="font-size:14px">' + esc(o.text) + "</div></div>";
+      return '<li class="t-' + t.color + '"><span class="li-ico">' + I.svg(o.icon) + '</span><span><b>' + esc(o.name) + "</b><small>" + esc(q.slot) + " · Team " + esc(t.name) + "</small></span></li>";
     }).join("");
     var warm = rid === "warm";
-    return '<section class="screen">' +
-      '<div class="card big-cta"><span class="eyebrow">' + esc(Rd.name) + "</span><h1>All " + n + " decisions are locked.</h1>" +
-        '<p class="lead">Nobody knows the answers yet. ' + (warm ? "Time to find out which gut feelings were right." : "Now we run result day against the design your class just built.") + "</p>" +
-        '<div class="row" style="justify-content:center"><button class="btn btn-ghost" data-act="undo">' + ICON.undo + "Undo last pick</button>" +
-        (warm ? '<button class="btn btn-lg" data-act="start-reveal">Reveal the answers' + ICON.arrow + "</button>"
-              : '<button class="btn btn-lg" data-act="run-sim">' + ICON.play + "Run Result Day</button>") + "</div></div>" +
-      '<div class="locked-grid">' + cards + "</div></section>";
+    return '<section class="screen"><div class="intro">' +
+      '<div class="card" style="display:grid;gap:18px;align-content:start">' +
+        '<span class="eyebrow">' + esc(Rd.name) + "</span><h1>The blueprint is complete.</h1>" +
+        '<p class="lead">Your class picked every part of ' + esc(Rd.blueprint.title) + ". Nobody knows which parts were right yet. " +
+          (warm ? "Time to find out which gut feelings held up." : "Now we see how this design survives result day.") + "</p>" +
+        '<ul class="parts-list">' + list + "</ul>" +
+        '<div class="row"><button class="btn btn-ghost" data-act="undo">' + ICON.undo + "Undo last part</button>" +
+        (warm ? '<button class="btn btn-lg" data-act="start-reveal">Grade the blueprint' + ICON.arrow + "</button>"
+              : '<button class="btn btn-lg" data-act="run-sim">' + ICON.play + "Run Result Day</button>") + "</div>" +
+      "</div>" +
+      blueprintPanel(rid, "done") +
+      "</div></section>";
   }
 
   /* ---------- simulation & report ---------- */
@@ -435,47 +492,42 @@
     var p = r.picks[q.id], t = (p && team(p.team)) || state.teams[0];
     var shown = i < r.revealed;
     var pts = p ? pointsFor(rid, q, p.opt) : 0;
-    var opts = q.options.map(function (o) {
+    var parts = q.options.map(function (o) {
       var mine = p && p.opt === o.key;
-      var cls = "option";
-      var badge = "";
-      if (shown) {
-        cls += o.verdict === "correct" ? " is-correct" : o.verdict === "partial" ? " is-partial" : o.verdict === "trap" ? " is-trap" : " is-wrong";
-        if (o.verdict === "correct") badge = '<span class="badge best">Best choice</span>';
-        else if (o.verdict === "partial") badge = '<span class="badge half">Half right</span>';
-        else if (o.verdict === "trap") badge = '<span class="badge gut">Gut feeling</span>';
-      }
-      var by = mine ? '<span class="picked-by t-' + t.color + '">' + avatar(t) + esc(t.name) + (shown ? '<span class="points-pop' + (pts ? "" : " zero") + '">+' + pts + "</span>" : "") + "</span>" : "";
-      return '<div class="' + cls + '" style="cursor:default">' + by + badge + '<span class="letter">' + o.key + "</span><span>" + esc(o.text) +
-        (shown ? '<span class="why">' + esc(o.why) + "</span>" : "") + "</span></div>";
+      return partHTML(rid, q, o, { static: true, reveal: shown, pickedBy: mine ? t : null, pts: pts, dim: !shown && !mine });
     }).join("");
 
     var side;
     if (shown) {
       var o = p && optionOf(q, p.opt);
-      var verdictLine = !o ? "" : o.verdict === "correct" ? "Team " + esc(t.name) + " got it: +" + pts :
+      var verdictLine = !o ? "" : o.verdict === "correct" ? "Team " + esc(t.name) + " picked the best part: +" + pts :
         o.verdict === "partial" ? "Team " + esc(t.name) + " was half right: +" + pts :
         o.verdict === "trap" ? "Team " + esc(t.name) + " went with the gut feeling: +0" : "Team " + esc(t.name) + ": +0";
       side = '<aside class="card explain"><span class="eyebrow">Why</span><h3>' + esc(q.reveal.headline) + "</h3><p>" + esc(q.reveal.why) + "</p>" +
-        '<div class="proof"><div class="big">' + esc(q.reveal.proof) + '</div><div class="cap">' + esc(q.reveal.proofCaption) + "</div></div>" +
+        '<div class="picture"><span class="pic-ico">' + I.svg("bulb") + '</span><div><span class="eyebrow">Picture it</span><p>' + esc(q.reveal.picture) + "</p></div></div>" +
+        '<div class="rule"><span class="eyebrow">Rule to remember</span><b>' + esc(q.reveal.rule) + "</b></div>" +
         '<div class="row between"><span class="slide-ref">Lecture 2 · ' + esc(q.reveal.slide) + '</span><span class="team-chip t-' + t.color + '">' + avatar(t) + verdictLine + "</span></div></aside>";
     } else {
-      side = '<aside class="card mystery"><div class="qmark">?</div><h3 style="font-size:26px;font-weight:900">Team ' + esc(t.name) + " picked " + (p ? p.opt : "–") + ".</h3>" +
-        '<p class="muted">Best choice, half right, or gut feeling?</p><button class="btn btn-lg btn-quality" data-act="reveal-show">Reveal the answer</button></aside>';
+      var po = p && optionOf(q, p.opt);
+      side = '<aside class="card mystery"><div class="qmark">?</div><h3 style="font-size:26px;font-weight:900">Team ' + esc(t.name) + " chose " + (po ? "“" + esc(po.name) + "”" : "a part") + ".</h3>" +
+        '<p class="muted">Best part, half right, or gut feeling?</p><button class="btn btn-lg btn-quality" data-act="reveal-show">Reveal the answer</button></aside>';
     }
 
     var last = i === qs.length - 1;
-    var dots = '<div class="dots">' + qs.map(function (qq, k) {
-      var pk = r.picks[qq.id], tt = pk ? team(pk.team) : null;
-      return '<button class="dot' + (k < r.revealed && tt ? " locked t-" + tt.color : "") + (k === i ? " current" : "") + '" data-act="reveal-jump" data-i="' + k + '"' + (k > r.revealed ? " disabled" : "") + ' aria-label="Answer ' + (k + 1) + '">' + (k + 1) + "</button>";
+    var strip = '<div class="parts-strip" role="group" aria-label="Parts">' + qs.map(function (qq, k) {
+      var pk = r.picks[qq.id], tt = pk ? team(pk.team) : null, oo = pk ? optionOf(qq, pk.opt) : null;
+      var rev = k < r.revealed && oo;
+      return '<button class="strip-part' + (tt ? " t-" + tt.color : "") + (rev ? " " + VERDICT_CLASS[oo.verdict] : "") + (k === i ? " current" : "") + '" data-act="reveal-jump" data-i="' + k + '"' +
+        (k > r.revealed ? " disabled" : "") + ' title="' + esc(qq.slot + (oo ? ": " + oo.name : "")) + '">' + I.svg(oo ? oo.icon : qq.slotIcon) +
+        (rev ? '<span class="sm">' + I.svg(VERDICT_ICON[oo.verdict], "ico", 3.5) + "</span>" : "") + "</button>";
     }).join("") + "</div>";
 
     return '<section class="screen q-' + q.quality + '">' +
-      '<div class="reveal-nav"><span class="eyebrow">' + esc(Rd.name) + " · Answer " + (i + 1) + " of " + qs.length + "</span>" + dots + "</div>" +
-      '<div class="reveal"><article class="card question"><div class="row between">' + qtag(q.quality) + "</div><h2>" + esc(q.title) + '</h2><p class="prompt" style="font-size:17px">' + esc(q.prompt) + "</p>" +
-        '<div class="options">' + opts + "</div></article>" + side + "</div>" +
+      '<div class="reveal-nav"><span class="eyebrow">Grading the blueprint · Part ' + (i + 1) + " of " + qs.length + ": " + esc(q.slot) + "</span>" + strip + "</div>" +
+      '<div class="reveal"><article class="card question"><div class="row between"><span class="slot-label">' + I.svg(q.slotIcon) + esc(q.slot) + "</span>" + qtag(q.quality) + "</div><h2>" + esc(q.title) + '</h2><p class="prompt" style="font-size:17px">' + esc(q.prompt) + "</p>" +
+        '<div class="parts list">' + parts + "</div></article>" + side + "</div>" +
       '<div class="reveal-nav"><button class="btn btn-ghost" data-act="reveal-prev"' + (i === 0 ? " disabled" : "") + ">" + ICON.back + "Previous</button>" +
-        (shown ? '<button class="btn btn-lg" data-act="reveal-next">' + (last ? "See the scores" : "Next answer") + ICON.arrow + "</button>"
+        (shown ? '<button class="btn btn-lg" data-act="reveal-next">' + (last ? "See the scores" : "Next part") + ICON.arrow + "</button>"
                : '<button class="btn btn-lg btn-quality" data-act="reveal-show">Reveal the answer</button>') +
       "</div></section>";
   }
@@ -495,16 +547,22 @@
       return '<div class="score-row t-' + x.t.color + '"><div class="name">' + avatar(x.t) + "<span>" + esc(x.t.name) + "</span>" + (x.s === top ? ICON.crown : "") + "</div>" +
         '<div class="bar"><div class="fill" data-w="' + w.toFixed(1) + '%"></div></div><div class="pts">' + x.s + "</div></div>";
     }).join("");
+    var r = state.rounds[rid], good = 0;
+    Rd.questions.forEach(function (q) { var p = r.picks[q.id], o = p && optionOf(q, p.opt); if (o && o.verdict === "correct") good++; });
     var totals = rid === "final" ? '<p class="muted" style="font-weight:700">Season totals, both rounds: ' + state.teams.map(function (t) { return esc(t.name) + " " + totalScore(t.id); }).join(" · ") + "</p>" : "";
     var actions = rid === "warm"
       ? '<button class="btn btn-ghost" data-act="home">' + ICON.home + 'Home</button><button class="btn btn-lg" data-act="open-round" data-round="final">After the lecture: Result Day' + ICON.arrow + "</button>"
       : '<button class="btn btn-ghost" data-act="home">' + ICON.home + 'Home</button><button class="btn btn-ghost" data-act="show-report">See the simulation report</button>';
     return '<section class="screen">' +
       '<div class="card winner-banner">' + ICON.crown.replace('class="crown"', 'class="crown" style="width:56px;height:56px"') + '<span class="eyebrow">' + esc(Rd.kicker) + "</span><h1>" + title + "</h1>" +
-        '<p class="lead">' + (rid === "warm" ? "Keep the traps in mind. The lecture explains every one of them." : "Every fix had a price. Your class just paid some of them.") + "</p></div>" +
-      '<div class="card scoreboard"><div class="row between"><h2 style="font-size:24px">' + esc(Rd.name) + ' scores</h2><span class="muted">out of ' + max + "</span></div>" + bars + totals + "</div>" +
-      '<div class="row between"><button class="btn btn-danger btn-sm' + (ui.armed === "replay-" + rid ? " armed" : "") + '" data-act="replay-round">' +
-        (ui.armed === "replay-" + rid ? "Click again to clear this round" : "Replay this round") + '</button><div class="row">' + actions + "</div></div></section>";
+        '<p class="lead">The class picked the best part ' + good + " times out of " + Rd.questions.length + ". " +
+        (rid === "warm" ? "Keep the traps in mind: the lecture explains every one of them." : "Every fix had a price. Your class just paid some of them.") + "</p></div>" +
+      '<div class="intro">' +
+        '<div style="display:grid;gap:20px;align-content:start;min-width:0"><div class="card scoreboard"><div class="row between"><h2 style="font-size:24px">' + esc(Rd.name) + ' scores</h2><span class="muted">out of ' + max + "</span></div>" + bars + totals + "</div>" +
+        '<div class="row between"><button class="btn btn-danger btn-sm' + (ui.armed === "replay-" + rid ? " armed" : "") + '" data-act="replay-round">' +
+          (ui.armed === "replay-" + rid ? "Click again to clear this round" : "Replay this round") + '</button><div class="row">' + actions + "</div></div></div>" +
+        blueprintPanel(rid, "graded") +
+      "</div></section>";
   }
 
   /* ---------- facts drawer ---------- */
@@ -540,18 +598,48 @@
     if (!rid || !ui.selected || ui.locking) return;
     var r = state.rounds[rid];
     if (r.stage !== "play") return;
-    var q = R(rid).questions[r.q], t = turnTeam(rid, r.q);
+    var q = R(rid).questions[r.q], t = turnTeam(rid, r.q), o = optionOf(q, ui.selected);
+    var card = $app.querySelector(".part.selected .part-icon"), slot = $app.querySelector(".bp-slot.current");
     r.picks[q.id] = { opt: ui.selected, team: t.id };
     r.order.push(q.id);
     ui.locking = true;
     stopTimer();
     save();
-    render();
-    setTimeout(function () {
-      ui.locking = false; ui.selected = null;
-      advance(rid);
-      save(); render(); scrollTop();
-    }, 1150);
+    var lockBtn = $app.querySelector('[data-act="lock"]');
+    if (lockBtn) { lockBtn.disabled = true; }
+    $app.querySelectorAll(".part").forEach(function (b) { b.disabled = true; });
+    function placed() {
+      ui.justPlaced = q.id;
+      render();
+      setTimeout(function () {
+        ui.locking = false; ui.selected = null; ui.justPlaced = null;
+        advance(rid);
+        save(); render(); scrollTop();
+      }, 1000);
+    }
+    var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!card || !slot || reduced || !document.body.animate) { placed(); return; }
+    flyPart(card, slot, t, o, placed);
+  }
+
+  function flyPart(from, to, t, o, done) {
+    var a = from.getBoundingClientRect(), b = to.getBoundingClientRect();
+    var tok = document.createElement("div");
+    tok.className = "flight t-" + t.color;
+    tok.innerHTML = '<span class="part-icon">' + I.svg(o.icon) + "</span><span>" + esc(o.name) + "</span>";
+    document.body.appendChild(tok);
+    var w = tok.offsetWidth, h = tok.offsetHeight;
+    var sx = a.left + a.width / 2 - w / 2, sy = a.top + a.height / 2 - h / 2;
+    var ex = b.left + b.width / 2 - w / 2, ey = b.top + b.height / 2 - h / 2;
+    tok.style.left = sx + "px"; tok.style.top = sy + "px";
+    var dx = ex - sx, dy = ey - sy, lift = Math.min(140, 40 + Math.abs(dx) * 0.15);
+    var anim = tok.animate([
+      { transform: "translate(0,0) scale(.7)", opacity: 0.4 },
+      { transform: "translate(0,-14px) scale(1.12)", opacity: 1, offset: 0.18 },
+      { transform: "translate(" + dx * 0.55 + "px," + (dy * 0.55 - lift) + "px) scale(1.08) rotate(-4deg)", offset: 0.6 },
+      { transform: "translate(" + dx + "px," + dy + "px) scale(.92)", opacity: 1 }
+    ], { duration: 900, easing: "cubic-bezier(.45,.05,.3,1)", fill: "forwards" });
+    anim.onfinish = function () { tok.remove(); done(); };
   }
 
   function undo() {

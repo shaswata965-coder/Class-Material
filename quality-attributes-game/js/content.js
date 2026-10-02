@@ -1,17 +1,14 @@
 /* Trade-off Arena — question content for CSE 444 Lecture 2 (Quality Attributes).
  *
+ * Every decision adds one part to a blueprint of the system the class is building.
+ * Questions are conceptual: students reason about ideas, not arithmetic.
+ *
  * Verdicts: "correct" (full points), "partial" (half points),
  * "trap" (0 points, the tempting gut-feeling answer), "wrong" (0 points).
  * Each final-round option carries a `sim` object that feeds the Result Day simulation.
+ * Icon names refer to js/icons.js.
  */
 window.ARENA_CONTENT = {
-  qualities: {
-    performance:   { label: "Performance" },
-    availability:  { label: "Availability" },
-    modifiability: { label: "Modifiability" },
-    security:      { label: "Security" }
-  },
-
   rounds: {
     /* ------------------------------------------------------------------ */
     warm: {
@@ -19,183 +16,227 @@ window.ARENA_CONTENT = {
       kicker: "Round 1 · Warm-up",
       name: "Eid Ticket Rush",
       when: "Before the lecture",
-      tagline: "Six decisions where gut feeling picks the wrong answer.",
+      tagline: "Build a ticket system part by part, and see how often gut feeling picks the wrong part.",
       story:
-        "Eid Express sells bus tickets for the Eid journey home. Sales open Friday at 9:00 am, " +
-        "and last year the site crashed four minutes later. Your teams are the architects this year. " +
-        "Each team sends one person up per decision. Nobody sees the answers until every decision is locked.",
+        "Eid Express sells bus tickets for the journey home. Sales open on Friday morning, and last year the site crashed within minutes. " +
+        "This year your teams build it again, one part at a time. Nobody sees which parts were right until the whole blueprint is finished.",
       facts: [
         { k: "Sale opens", v: "Friday, 9:00 am" },
-        { k: "First hour", v: "50,000 people" },
-        { k: "Last year", v: "Crashed after 4 minutes" },
-        { k: "Your job", v: "Six design decisions" }
+        { k: "The crowd", v: "Everyone at once" },
+        { k: "Last year", v: "Crashed in minutes" },
+        { k: "Your job", v: "Pick the six parts" }
       ],
+      blueprint: {
+        title: "Eid Express",
+        nodes: [
+          { id: "travellers", label: "Travellers", icon: "users", x: 26, y: 9 },
+          { id: "db", label: "Routes & fares", icon: "db", x: 26, y: 90 }
+        ],
+        slots: {
+          w1: { x: 75, y: 9 },
+          w6: { x: 26, y: 28 },
+          w3: { x: 26, y: 48 },
+          w5: { x: 75, y: 48 },
+          w2: { x: 26, y: 69 },
+          w4: { x: 75, y: 70 }
+        },
+        links: [
+          ["w1", "travellers", "dotted"], ["travellers", "w6"], ["w6", "w3"], ["w3", "w2"], ["w2", "db"],
+          ["w3", "w5"], ["w5", "w4"]
+        ]
+      },
       questions: [
         {
           id: "w1",
           quality: "performance",
-          title: "Two builds, one sale day",
+          slot: "Speed check",
+          slotIcon: "gauge",
+          title: "How do we know it’s fast enough?",
           prompt:
-            "The team load-tested two builds with 1,000 bookings each. On sale day, 50,000 people book in the first hour. Which build do you ship?",
-          table: {
-            head: ["", "Build A", "Build B"],
-            rows: [
-              ["Average", "300 ms", "420 ms"],
-              ["p50 (median)", "140 ms", "380 ms"],
-              ["p99", "6.2 s", "0.7 s"]
-            ],
-            note: "p50: half of the bookings finish faster. p99: 99 of every 100 finish faster."
-          },
+            "Before sale day the team tests the site. They need one way to decide whether it is fast enough. Which speed check goes on the dashboard?",
           options: [
-            { key: "A", verdict: "trap", text: "Ship Build A. Its average is 120 ms faster.",
-              why: "The average hides the tail: 1 booking in 100 takes over 6 s." },
-            { key: "B", verdict: "correct", text: "Ship Build B. Its slowest bookings are far faster.",
-              why: "Slightly slower on average, but 99 of every 100 bookings finish within 0.7 s." },
-            { key: "C", verdict: "wrong", text: "Either one. Nobody notices 120 ms.",
-              why: "Nobody notices 120 ms, but people do notice 6 s, and 500 of them an hour will." },
-            { key: "D", verdict: "wrong", text: "Ship Build A and add a loading spinner for the slow ones.",
-              why: "The wait looks nicer but is still 6 s, and impatient people refresh, adding load." }
+            { key: "A", verdict: "trap", icon: "barChart", name: "Average time",
+              text: "Add up every booking’s time and divide. One tidy number.",
+              why: "A few very slow bookings hide inside a nice-looking average. Those customers still wait, and they refresh." },
+            { key: "B", verdict: "correct", icon: "target", name: "Slowest 1 in 100",
+              text: "Look at the slow end: 99 of every 100 bookings must finish within a time limit.",
+              why: "It watches the unlucky customers, the ones who give up and complain." },
+            { key: "C", verdict: "wrong", icon: "zap", name: "Best time ever",
+              text: "Show the fastest booking we managed. It looks great in a report.",
+              why: "The best case says nothing about the people stuck waiting." },
+            { key: "D", verdict: "wrong", icon: "loader", name: "Friendly spinner",
+              text: "Skip measuring. Show a nice spinner so waiting feels shorter.",
+              why: "The wait is just as long, and people refresh, which makes it worse." }
           ],
           reveal: {
-            headline: "1 in 100 sounds rare, until 50,000 people show up.",
+            headline: "The average hides the people who are suffering.",
             why:
-              "Build A’s slow 1% is 500 travellers an hour stuck for over 6 seconds. They refresh, which adds load and slows everyone down. " +
-              "That is why performance requirements use percentiles, like “p99 ≤ 1 s”, instead of averages.",
-            proof: "50,000 × 1% = 500",
-            proofCaption: "people an hour waiting over 6 s with Build A",
+              "If 99 bookings take a moment and one takes forever, the average still looks fine. On sale day, “1 in 100” is hundreds of real people. " +
+              "So we measure the slow end: “99 of every 100 bookings within one second”.",
+            picture: "A class average of 70% can hide the student who failed. A good teacher looks at who is struggling, not only at the average.",
+            rule: "Measure the slowest, not the average.",
             slide: "Slide 5"
           }
         },
         {
           id: "w2",
           quality: "performance",
-          title: "9:00 am and the queue keeps growing",
+          slot: "Booking engine",
+          slotIcon: "cpu",
+          title: "9:00 am and the line keeps growing",
           prompt:
-            "At 9:00, 50 bookings arrive every second. Each booking takes 0.3 s, and 0.25 s of that is loading the route and fare list from the database. That list changes twice a year.",
-          chips: ["50 bookings / s", "0.3 s per booking", "10 worker threads", "Database 95% busy"],
+            "Every booking first looks up the bus routes and fares in the database, which is the slowest step. That list almost never changes. " +
+            "At 9:00 the database is struggling and bookings are piling up.",
           options: [
-            { key: "A", verdict: "trap", text: "Double the worker threads to 20, so twice as many bookings run at once.",
-              why: "The extra threads wait on the same 95%-busy database and push it past its limit." },
-            { key: "B", verdict: "wrong", text: "Move to a server with a faster CPU.",
-              why: "The time goes on waiting for the database, not on the CPU." },
-            { key: "C", verdict: "wrong", text: "Show a “please wait” page so people stop refreshing.",
-              why: "Fewer refreshes help a little, but every real booking is still slow." },
-            { key: "D", verdict: "correct", text: "Keep the route and fare list in memory (a cache) and refresh it every hour.",
-              why: "Each booking skips the database and drops from 0.3 s to 0.05 s." }
+            { key: "A", verdict: "trap", icon: "userPlus", name: "More workers",
+              text: "Double the number of workers handling bookings, so more run at the same time.",
+              why: "Every extra worker waits on the same struggling database. The queue just moves there." },
+            { key: "B", verdict: "wrong", icon: "cpu", name: "Faster processor",
+              text: "Move the site to a machine with a faster processor.",
+              why: "The time is spent waiting for the database, not thinking." },
+            { key: "C", verdict: "wrong", icon: "hourglass", name: "Please-wait page",
+              text: "Show a “please wait” page so people stop refreshing.",
+              why: "Slightly fewer clicks, but every real booking is still slow." },
+            { key: "D", verdict: "correct", icon: "zap", name: "Keep a copy nearby",
+              text: "Keep the route and fare list in fast memory (a cache) and refresh it every hour.",
+              why: "Bookings skip the slow step completely, so each one finishes far sooner." }
           ],
           reveal: {
-            headline: "You can’t slow the crowd down, so make each booking shorter.",
+            headline: "Don’t add people to a slow line. Make the slow step disappear.",
             why:
-              "Little’s Law: bookings in progress = arrival rate × time per booking. 15 bookings in progress need more than 10 threads, " +
-              "but extra threads only move the queue to the database. Removing the slow database call shrinks the time itself.",
-            proof: "L = 50 × 0.3 = 15",
-            proofCaption: "bookings in progress for 10 threads. With the cache: 50 × 0.05 = 2.5",
+              "How crowded a system gets depends on how many people arrive and how long each one stays. We can’t send customers away, " +
+              "but we can make each booking shorter. A nearby copy of data that rarely changes removes the slowest step.",
+            picture: "A tea stall with one kettle doesn’t get faster by hiring more helpers: they all wait for the kettle. Keep a flask of hot tea ready instead.",
+            rule: "Shorten the work, don’t just add workers.",
             slide: "Slides 6–9"
           }
         },
         {
           id: "w3",
           quality: "availability",
+          slot: "Server setup",
+          slotIcon: "server",
           title: "More pieces, more robust?",
           prompt:
-            "Last Eid, the single server crashed and ticket sales stopped. Every server or service below is up 99.9% of the time, and a load balancer is up 99.99%. Which design keeps sales running the most?",
+            "Last Eid, the one and only server crashed, and ticket sales stopped completely. How should this year’s servers be set up?",
           options: [
-            { key: "A", verdict: "correct", text: "Run two copies of the server behind a load balancer.",
-              why: "Sales stop only if both copies fail together: about 99.99%, or 4 minutes down a month." },
-            { key: "B", verdict: "trap", text: "Split the app into 5 services (Login, Search, Seats, Booking, Payment). Every booking passes through all 5.",
-              why: "All 5 must work at once: 0.999⁵ = 99.5%, about 3.6 hours down a month." },
-            { key: "C", verdict: "wrong", text: "Keep the single server, as today.",
-              why: "99.9%: about 43 minutes down a month." },
-            { key: "D", verdict: "wrong", text: "Replace it with one bigger, more powerful server.",
-              why: "Faster, but still one machine. When it fails, everything stops: still 99.9%." }
+            { key: "A", verdict: "correct", icon: "copy", name: "Two copies",
+              text: "Run two identical servers side by side. If one falls over, the other keeps selling.",
+              why: "Sales stop only if both fail at the same moment, which is very rare." },
+            { key: "B", verdict: "trap", icon: "pieces", name: "Five small services",
+              text: "Split the app into five small services: login, search, seats, booking and payment. Every booking goes through all five.",
+              why: "Now there are five things that can break, and any one of them stops a booking." },
+            { key: "C", verdict: "wrong", icon: "server", name: "Keep one server",
+              text: "Keep a single server, the same as last year.",
+              why: "Same as last year: one crash and everything stops." },
+            { key: "D", verdict: "wrong", icon: "hardDrive", name: "One giant server",
+              text: "Replace it with one much bigger, more powerful server.",
+              why: "Faster, but still one machine. When it fails, everything stops." }
           ],
           reveal: {
-            headline: "Chains multiply downtime. Spare copies divide it.",
+            headline: "A chain is as weak as its weakest link. A spare copy is a safety net.",
             why:
-              "When every part must work, you multiply their availabilities, so each part you add to the chain lowers the total. " +
-              "A spare copy fails only if both copies are down at the same moment, which is far rarer.",
-            proof: "0.999⁵ = 99.5%",
-            proofCaption: "for the 5-service chain, vs. 1 − 0.001² = 99.9999% for a redundant pair",
+              "When every part must work, each extra part is one more way to fail, so splitting into five pieces made the system more fragile. " +
+              "Two copies side by side fail only when both break at once.",
+            picture: "Old fairy lights: one bulb dies and the whole string goes dark. A house with two water tanks still has water when one runs dry.",
+            rule: "Chains multiply risk. Spares divide it.",
             slide: "Slide 11"
           }
         },
         {
           id: "w4",
           quality: "availability",
-          title: "The wallet provider slows down",
+          slot: "Calling the wallet",
+          slotIcon: "card",
+          title: "The wallet company slows down",
           prompt:
-            "At 9:20, the mobile-wallet provider starts taking 30 s per payment. Card and cash bookings share the same 10 worker threads. What should Eid Express do when it calls the wallet?",
+            "At 9:20 the mobile-wallet company starts taking ages to answer each payment. Card and cash bookings share the same workers. " +
+            "What should Eid Express do when it calls the wallet?",
           options: [
-            { key: "A", verdict: "trap", text: "Wait as long as it takes. Never give up on a customer’s payment.",
-              why: "Within seconds all 10 threads are stuck waiting, and card and cash bookings stop too." },
-            { key: "B", verdict: "trap", text: "Retry immediately, again and again, until the wallet answers.",
-              why: "A retry storm: it hammers a provider that is already struggling and can charge a customer twice." },
-            { key: "C", verdict: "correct", text: "Give up after 2 s, retry up to 3 times with growing random pauses, then stop calling for a while and show “payment pending”.",
-              why: "A timeout, backoff and a circuit breaker stop the slow provider from taking the rest of the site down." },
-            { key: "D", verdict: "wrong", text: "Restart our server whenever the threads get stuck.",
-              why: "Bookings in progress are lost, and the threads are stuck again a few seconds later." }
+            { key: "A", verdict: "trap", icon: "hourglass", name: "Wait forever",
+              text: "Wait as long as it takes. Never give up on a customer’s payment.",
+              why: "Soon every worker is stuck waiting, and card and cash bookings stop too." },
+            { key: "B", verdict: "trap", icon: "refresh", name: "Keep retrying",
+              text: "If it doesn’t answer, try again straight away, over and over.",
+              why: "It floods a company that is already struggling, and can charge a customer twice." },
+            { key: "C", verdict: "correct", icon: "timer", name: "Time limit, then step back",
+              text: "Stop waiting after a couple of seconds, retry a few times with pauses, then stop calling for a while and show “payment pending”.",
+              why: "Workers stay free, other payments keep working, and the wallet gets time to recover." },
+            { key: "D", verdict: "wrong", icon: "power", name: "Restart when stuck",
+              text: "Restart our server whenever the workers get stuck.",
+              why: "Bookings in progress are lost, and the workers are stuck again a minute later." }
           ],
           reveal: {
-            headline: "One slow dependency can stop everything, unless you contain it.",
+            headline: "One slow partner can freeze everything, unless you limit how long you wait.",
             why:
-              "A call with no timeout holds a thread for as long as the provider takes. Ten threads stuck for 30 s means the whole site serves " +
-              "one booking every 3 s. Failing fast on purpose keeps the threads free for everyone else.",
-            proof: "10 threads ÷ 30 s",
-            proofCaption: "= 1 booking every 3 seconds, for the whole site",
+              "Each waiting call ties up a worker. If calls never time out, the slow wallet quietly takes every worker hostage. " +
+              "A time limit, polite retries and a “circuit breaker” that stops calling for a while keep the rest of the site alive.",
+            picture: "A shopkeeper on hold forever with one supplier can’t serve anyone else. Hang up, note it down, call back later.",
+            rule: "Every call to someone else needs a time limit.",
             slide: "Slides 10–14"
           }
         },
         {
           id: "w5",
           quality: "modifiability",
+          slot: "Payment options",
+          slotIcon: "plug",
           title: "Another wallet before Eid",
           prompt:
-            "Marketing adds a new payment method every few months. Next week it’s a third mobile wallet. Right now BookingService has an if / else-if branch for every provider.",
-          code:
-            'if method == "CARD":\n    cardApi.charge(total)\nelif method == "WALLET1":\n    wallet1.pay(total)\nelif method == "WALLET2":\n    wallet2.send(total)',
+            "Marketing adds a new way to pay every few months, and next week it’s a third mobile wallet. Right now the booking code has a separate if-else branch for every payment company.",
           options: [
-            { key: "A", verdict: "trap", text: "Add one more else-if to BookingService. Five lines, done today.",
-              why: "Quick today, but every provider means editing core booking code, retesting every payment path and redeploying." },
-            { key: "B", verdict: "correct", text: "Create a PaymentGateway interface. Each provider is its own class, picked from a table filled at start-up.",
-              why: "A new wallet is one new class plus one table entry. BookingService never changes." },
-            { key: "C", verdict: "wrong", text: "Copy BookingService into BookingServiceWallet3 and change the copy.",
-              why: "Now every bug fix has to be made in two places, and soon in five." },
-            { key: "D", verdict: "wrong", text: "Let the wallet company’s code write to our database directly, so BookingService doesn’t change.",
-              why: "It ties us to one vendor and opens our database to outside code." }
+            { key: "A", verdict: "trap", icon: "branch", name: "One more if-else",
+              text: "Add one more branch to the booking code. Five minutes, done today.",
+              why: "Quick today, but every new company means editing and retesting the most important code." },
+            { key: "B", verdict: "correct", icon: "plug", name: "Plug-in sockets",
+              text: "Give every payment company the same socket (an interface). Each company becomes its own plug-in, and the booking code never changes.",
+              why: "A new wallet is one new plug-in. The booking code doesn’t even notice." },
+            { key: "C", verdict: "wrong", icon: "copy", name: "Copy the code",
+              text: "Copy the booking code into a new version just for the new wallet.",
+              why: "Every future bug must now be fixed in two places, then three, then four." },
+            { key: "D", verdict: "wrong", icon: "link", name: "Let them in directly",
+              text: "Let the wallet company’s code write straight into our database.",
+              why: "It ties us to one company and lets outside code touch our data." }
           ],
           reveal: {
-            headline: "The fastest change today can make every later change slower.",
+            headline: "Build sockets, not special cases.",
             why:
-              "Each else-if ties BookingService to one more vendor. Depending on an interface we own turns the arrows around: " +
-              "providers depend on our contract, and new ones plug in without touching the core.",
-            proof: "0 lines",
-            proofCaption: "changed in BookingService for the next wallet",
+              "Every if-else ties the core code to one more company, so every change risks breaking the rest. With one shared socket, " +
+              "new companies plug in from the outside and the core code stays untouched.",
+            picture: "You don’t rewire your house for every new appliance. You plug it into a standard socket.",
+            rule: "Things that change often should plug in, not be built in.",
             slide: "Slides 15–17"
           }
         },
         {
           id: "w6",
           quality: "security",
+          slot: "Login gate",
+          slotIcon: "lock",
           title: "Bots at the login page",
           prompt:
-            "Sunday night: 1,000 login attempts a minute, using email and password pairs leaked from other websites. The attackers are betting that people reuse passwords.",
+            "Sunday night: bots try thousands of logins a minute, using email and password pairs stolen from other websites. They’re betting that people reuse passwords.",
           options: [
-            { key: "A", verdict: "trap", text: "Lock an account forever after 3 wrong passwords.",
-              why: "Now the attacker can lock out any customer on sale day: a denial of service they control." },
-            { key: "B", verdict: "trap", text: "Require 16-character passwords with symbols.",
-              why: "Leaked passwords are real passwords that already passed someone’s rules, and existing users keep theirs." },
-            { key: "C", verdict: "correct", text: "Allow 5 attempts per account per minute, then make them wait, and alert the operators.",
-              why: "Guessing slows to a crawl, real users wait at most a minute, and people know an attack is happening." },
-            { key: "D", verdict: "wrong", text: "Move the login page to a secret URL.",
-              why: "Security through obscurity: bots find the new URL within minutes." }
+            { key: "A", verdict: "trap", icon: "ban", name: "Lock out forever",
+              text: "Lock an account permanently after three wrong passwords.",
+              why: "Now the attacker can lock out any customer on sale day, on purpose." },
+            { key: "B", verdict: "trap", icon: "password", name: "Super-long passwords",
+              text: "Force everyone to use very long passwords full of symbols.",
+              why: "The stolen passwords are real ones that already work, and existing users keep theirs." },
+            { key: "C", verdict: "correct", icon: "shieldCheck", name: "Slow down and alert",
+              text: "Allow only a few tries per account each minute, make the rest wait, and alert the team.",
+              why: "Guessing becomes painfully slow, real users barely notice, and people know an attack is on." },
+            { key: "D", verdict: "wrong", icon: "eyeOff", name: "Secret login page",
+              text: "Move the login page to a secret web address.",
+              why: "Bots find the new address within minutes." }
           ],
           reveal: {
-            headline: "The strictest-looking rule can become the attacker’s weapon.",
+            headline: "The strictest rule can become the attacker’s weapon.",
             why:
-              "Permanent lockout turns a guessing attack into a denial-of-service attack. Rate limiting slows the guesses without " +
-              "punishing real users, and the alert brings people in to react.",
-            proof: "1,000 → 5",
-            proofCaption: "guesses per minute per account, with operators alerted",
+              "Permanent lockout lets an attacker lock out real customers whenever they like. Slowing guesses down and calling in people " +
+              "stops the attack without punishing the customers we are protecting.",
+            picture: "A shop that bolts its door forever after three wrong knocks lets anyone close the shop. A guard who slows suspicious visitors and radios for help is better.",
+            rule: "Slow the attacker, not the customer.",
             slide: "Slides 18–20"
           }
         }
@@ -208,253 +249,305 @@ window.ARENA_CONTENT = {
       kicker: "Round 2 · Final challenge",
       name: "Result Day",
       when: "After the lecture",
-      tagline: "Eight harder decisions, then a live simulation of your design.",
+      tagline: "Build a result portal from eight harder parts, then watch it face result day.",
       story:
-        "At 10:00 am the university publishes final results. Within minutes 40,000 students, and their parents, open ResultHub. " +
-        "Last semester it was down for two hours. Your class redesigns it. When every decision is locked, we run result day " +
-        "against your design: a traffic spike, a slow SMS provider, a database failure, a curious student, a botnet and the academic council.",
+        "At 10:00 am the university publishes final results, and within minutes 40,000 students and their parents rush to ResultHub. " +
+        "Last semester it was down for two hours. Your class designs it again, one part at a time. When the blueprint is finished, " +
+        "we run result day against it.",
       facts: [
-        { k: "Peak load", v: "800 requests / s", note: "for the first 10 minutes (normally 20 / s)" },
-        { k: "Time per request", v: "250 ms", note: "200 ms of it is the database computing the CGPA" },
-        { k: "Worker threads", v: "50 per app server" },
-        { k: "Results", v: "Final at 10:00", note: "corrections are rare" },
-        { k: "Guardian SMS", v: "Sent when a result is viewed", note: "the SMS provider is up 99.5%" },
-        { k: "Student IDs", v: "Printed on ID cards", note: "and sequential, e.g. 221-15-4512" },
+        { k: "The rush", v: "Everyone in the first 10 minutes", note: "Then it calms down quickly" },
+        { k: "Slowest step", v: "The database working out each CGPA" },
+        { k: "Results", v: "Fixed once published", note: "Corrections are rare" },
+        { k: "Each student", v: "Looks up only their own result" },
+        { k: "Guardian SMS", v: "A text goes to each guardian", note: "The SMS company is sometimes slow" },
+        { k: "Student IDs", v: "Printed on ID cards", note: "and numbered in order" },
         { k: "Grading rules", v: "Change most semesters" },
         { k: "Goal", v: "Fast, up and safe all morning" }
       ],
+      blueprint: {
+        title: "ResultHub",
+        nodes: [
+          { id: "students", label: "Students", icon: "users", x: 26, y: 8 },
+          { id: "db", label: "Database", icon: "db", x: 26, y: 92 }
+        ],
+        slots: {
+          f1: { x: 75, y: 9 },
+          f7: { x: 26, y: 24 },
+          f2: { x: 26, y: 41 },
+          f4: { x: 75, y: 31 },
+          f6: { x: 75, y: 52 },
+          f8: { x: 26, y: 58 },
+          f3: { x: 26, y: 75 },
+          f5: { x: 75, y: 89 }
+        },
+        links: [
+          ["f1", "students", "dotted"], ["students", "f7"], ["f7", "f2"], ["f2", "f8"], ["f8", "f3"], ["f3", "db"],
+          ["f2", "f4"], ["f2", "f6"], ["db", "f5", "dashed"]
+        ]
+      },
       questions: [
         {
           id: "f1",
           quality: "performance",
-          title: "Write the requirement",
+          slot: "The promise",
+          slotIcon: "fileText",
+          title: "What exactly are we promising?",
           prompt:
-            "The registrar wants a written performance requirement for result day before signing the budget. Which one goes into the contract?",
+            "Before paying for the new system, the registrar wants a written promise about speed on result day. Which promise goes into the contract?",
           options: [
-            { key: "A", verdict: "wrong", text: "“ResultHub must be fast and responsive.”",
-              why: "No number and no load: nobody can say whether it passed.", sim: { req: "fast" } },
-            { key: "B", verdict: "trap", text: "“Average response time under 1 second.”",
-              why: "The average can pass while thousands of students wait 5 s or more.", sim: { req: "avg" } },
-            { key: "C", verdict: "trap", text: "“p50 under 200 ms, tested at 20 requests per second.”",
-              why: "Precise, but measured on a normal day. Result day is 40 times busier.", sim: { req: "p50normal" } },
-            { key: "D", verdict: "correct", text: "“p99 under 1 second while serving 800 requests per second.”",
-              why: "A percentile, a limit and the real peak load: testable and meaningful.", sim: { req: "p99peak" } }
+            { key: "A", verdict: "wrong", icon: "sparkles", name: "“Fast and smooth”",
+              text: "ResultHub will feel fast and responsive.",
+              why: "Nobody can ever say whether it passed. It’s a wish, not a promise.", sim: { req: "fast" } },
+            { key: "B", verdict: "trap", icon: "barChart", name: "Good on average",
+              text: "On average, a page loads in under one second.",
+              why: "The average can look fine while thousands of students wait far longer.", sim: { req: "avg" } },
+            { key: "C", verdict: "trap", icon: "coffee", name: "Tested on a quiet day",
+              text: "Pages load quickly, measured on a normal day with few visitors.",
+              why: "Result day is nothing like a quiet day. The test never sees the rush.", sim: { req: "p50normal" } },
+            { key: "D", verdict: "correct", icon: "target", name: "99 in 100, even at the peak",
+              text: "99 of every 100 pages load within one second, even in the 10:00 rush.",
+              why: "It protects the slow end and names the hardest moment, so it can be tested and checked.", sim: { req: "p99peak" } }
           ],
           reveal: {
-            headline: "A requirement needs a percentile, a limit and the load.",
+            headline: "A good promise says how fast, for whom, and when it’s hardest.",
             why:
-              "Averages hide the slow tail, and a test at normal load says nothing about 800 requests per second. " +
-              "“p99 ≤ 1 s at 800 req/s” can be tested before result day and checked during it.",
-            proof: "p99 ≤ 1 s @ 800 / s",
-            proofCaption: "a requirement you can test",
+              "“Fast” can’t be checked. Averages hide the unlucky students, and a quiet-day test says nothing about the rush. " +
+              "Naming the slow end and the busiest moment turns a wish into a promise you can test.",
+            picture: "“The bus is usually on time” means little. “99 of 100 buses arrive within 5 minutes, even at Eid” is a promise you can hold someone to.",
+            rule: "Promise the slowest case at the busiest time.",
             slide: "Slide 5"
           }
         },
         {
           id: "f2",
           quality: "performance",
-          title: "How many app servers?",
+          slot: "Server pool",
+          slotIcon: "servers",
+          title: "How big should the server pool be?",
           prompt:
-            "Size the server pool for the first 10 minutes: 800 requests per second, 0.25 s per request, 50 threads per server. Aim for about 65% utilization at peak.",
-          formula: "L = λ × W        utilization = L ÷ threads",
-          chips: ["λ = 800 / s", "W = 0.25 s", "50 threads per server", "Target ≈ 65%"],
+            "You can work out how many servers the 10:00 rush needs. How much do you actually buy?",
           options: [
-            { key: "A", verdict: "trap", text: "2 servers, plus auto-scaling that adds servers when they get busy. A new server takes 8 minutes to start.",
-              why: "100 threads for 200 requests in progress, and the new servers arrive when the 10-minute rush is nearly over.",
+            { key: "A", verdict: "trap", icon: "trendUp", name: "Start small, grow later",
+              text: "Start with a small pool and add servers automatically when it gets busy. A new server takes 8 minutes to start.",
+              why: "The rush is over in about 10 minutes, so the help arrives when it’s nearly finished.",
               sim: { servers: 2, autoscale: true } },
-            { key: "B", verdict: "trap", text: "4 servers: 200 threads, exactly the 200 we need.",
-              why: "That is 100% utilization: after any burst the queue never empties.", sim: { servers: 4 } },
-            { key: "C", verdict: "correct", text: "6 servers: 300 threads.",
-              why: "L = 800 × 0.25 = 200 busy threads, and 200 ÷ 300 = 67%.", sim: { servers: 6 } },
-            { key: "D", verdict: "partial", text: "16 servers: 800 threads, just to be safe.",
-              why: "It works at 25% utilization, but you pay for 16 servers that sit idle most of the year.", sim: { servers: 16 } }
+            { key: "B", verdict: "trap", icon: "equal", name: "Exactly enough",
+              text: "Buy exactly what the rush needs, so no server ever sits idle.",
+              why: "Servers that are busy every moment can’t absorb one extra burst, so the queue never empties.",
+              sim: { servers: 4 } },
+            { key: "C", verdict: "correct", icon: "gauge", name: "Room to breathe",
+              text: "Buy enough that the servers are busy about two-thirds of the time, even at the peak.",
+              why: "There is spare room to soak up bursts, without paying for a warehouse of idle machines.",
+              sim: { servers: 6 } },
+            { key: "D", verdict: "partial", icon: "warehouse", name: "Four times more",
+              text: "Buy four times what the rush needs, just to be safe.",
+              why: "It works, but most of those servers sit idle all year.", sim: { servers: 16 } }
           ],
           reveal: {
-            headline: "“Exactly enough” means a queue that never empties.",
+            headline: "“Exactly enough” is never enough.",
             why:
-              "Little’s Law gives the busy threads at peak: 200. At 100% utilization the queue grows without limit, so size for about 65%: " +
-              "200 ÷ 0.65 ≈ 308 threads, which is 6 servers. Auto-scaling handles slow growth, not a spike that is over in 10 minutes.",
-            proof: "800 × 0.25 ÷ 0.65 ≈ 308",
-            proofCaption: "threads needed, so 6 servers × 50 threads",
+              "When servers are busy every single moment, any small burst creates a queue that never clears, and waiting explodes. " +
+              "Leaving about a third spare keeps things smooth. Adding servers later is too slow for a rush that is over in minutes.",
+            picture: "A bus that is completely full at the first stop can’t pick anyone up at the second. Plan for some empty seats.",
+            rule: "Keep about a third spare at the busiest moment.",
             slide: "Slides 6–7"
           }
         },
         {
           id: "f3",
           quality: "performance",
-          title: "Speed up the CGPA query",
+          slot: "Speed-up",
+          slotIcon: "zap",
+          title: "Speed up the slow step",
           prompt:
-            "200 of the 250 ms is the database computing each student’s CGPA. Results are final at 10:00, and almost every student looks up only their own result. Which tactic?",
+            "The slowest part is the database working out each student’s CGPA. Results don’t change after 10:00, and almost every student looks up only their own result. Which speed-up do you add?",
           options: [
-            { key: "A", verdict: "trap", text: "Cache-aside, like FoodRush: load from the database on the first request, then keep the result for 10 minutes.",
-              why: "Each result is read by about one student, so at 10:00 almost every request is a first request: a cache miss.",
+            { key: "A", verdict: "trap", icon: "history", name: "Remember after the first visit",
+              text: "Like FoodRush: the first time a result is asked for, work it out, then remember it for 10 minutes.",
+              why: "Each result is asked for by about one student, so at 10:00 almost every visit is a first visit and nothing is remembered yet.",
               sim: { cache: "aside" } },
-            { key: "B", verdict: "trap", text: "Raise each server’s threads from 50 to 200.",
-              why: "The database is the bottleneck. Four times the connections make it thrash, and every request slows down.",
-              sim: { cache: "threads" } },
-            { key: "C", verdict: "correct", text: "Compute all 40,000 results before 10:00 and load them into the cache in advance.",
-              why: "Every request is a cache hit from the first second: 250 ms becomes about 50 ms.",
+            { key: "B", verdict: "trap", icon: "userPlus", name: "More workers per server",
+              text: "Let each server handle four times as many students at once.",
+              why: "They all pile onto the same database, which gets slower for everyone.", sim: { cache: "threads" } },
+            { key: "C", verdict: "correct", icon: "alarm", name: "Prepare in advance",
+              text: "Work out all 40,000 results before 10:00 and keep them ready in fast memory.",
+              why: "From the first second every result is already waiting, and the database barely works at all.",
               sim: { cache: "warm" } },
-            { key: "D", verdict: "partial", text: "Buy a database server with twice the CPUs.",
-              why: "It helps a little (about 210 ms) and costs a lot. The work is still done 40,000 times during the rush.",
-              sim: { cache: "bigdb" } }
+            { key: "D", verdict: "partial", icon: "dbBig", name: "Bigger database",
+              text: "Buy a much more powerful database machine.",
+              why: "A little faster, very expensive, and it still does all the work during the rush.", sim: { cache: "bigdb" } }
           ],
           reveal: {
-            headline: "A cache only helps when the same data is read again.",
+            headline: "Remembering only helps if someone asks twice.",
             why:
-              "Cache-aside worked for FoodRush because thousands of customers read the same menu. Here each result is read by about one " +
-              "student, so a cold cache misses on almost every request at 10:00. Results are known in advance, so warm the cache before the rush.",
-            proof: "250 → 50 ms",
-            proofCaption: "per request with a warm cache, so busy threads drop from 200 to 40",
+              "FoodRush’s trick worked because thousands of customers read the same menu. Here each result is read by about one student, " +
+              "so “remember after the first visit” remembers nothing in time. Results are known before 10:00, so prepare them in advance.",
+            picture: "A teacher doesn’t start marking papers while 40,000 students queue at the notice board. The marks are ready before the notice goes up.",
+            rule: "If you know the answers in advance, prepare them in advance.",
             slide: "Slides 8–9"
           }
         },
         {
           id: "f4",
           quality: "availability",
+          slot: "Guardian SMS",
+          slotIcon: "msg",
           title: "The guardian SMS",
           prompt:
-            "Today the result page waits until the guardian SMS has been sent, then shows the grades. On result day the SMS provider may slow down badly. What do you change?",
+            "Right now the result page waits until the guardian’s text message has been sent, and only then shows the grades. On result day the SMS company might get very slow.",
           options: [
-            { key: "A", verdict: "correct", text: "Show the result at once. Put the SMS in a queue that a background worker sends, with a timeout, backoff retries and a circuit breaker.",
-              why: "Students never wait for the SMS. If the provider is slow, messages go out late, but they all go out.",
+            { key: "A", verdict: "correct", icon: "mail", name: "Send it later",
+              text: "Show the result straight away. Put the text in a queue and send it in the background, with time limits and retries.",
+              why: "Students never wait for the SMS. If the SMS company is slow, texts arrive late, but they all arrive.",
               sim: { sms: "queue" } },
-            { key: "B", verdict: "trap", text: "Nothing. Keep waiting, because guardians must be told.",
-              why: "If the provider takes 20 s, every page holds a thread for 20 s and the whole portal stops.",
+            { key: "B", verdict: "trap", icon: "hourglass", name: "Keep waiting",
+              text: "Change nothing. The guardian must be told before the student sees anything.",
+              why: "If the SMS company takes 20 seconds, every page takes 20 seconds, and the whole portal jams.",
               sim: { sms: "sync" } },
-            { key: "C", verdict: "trap", text: "Retry the SMS up to 5 times, straight away, inside the page request.",
-              why: "Pages wait even longer, and the extra calls bury a provider that is already struggling.",
-              sim: { sms: "retry" } },
-            { key: "D", verdict: "wrong", text: "Stop sending the guardian SMS.",
-              why: "Faster, but it removes a feature the university requires.",
-              sim: { sms: "none" } }
+            { key: "C", verdict: "trap", icon: "refresh", name: "Retry right away",
+              text: "If the text fails, try again up to five times before showing the page.",
+              why: "Pages wait even longer, and the extra attempts bury the struggling SMS company.", sim: { sms: "retry" } },
+            { key: "D", verdict: "wrong", icon: "bellOff", name: "Drop the SMS",
+              text: "Stop sending guardian texts altogether.",
+              why: "Fast, but it removes something the university requires.", sim: { sms: "none" } }
           ],
           reveal: {
-            headline: "Don’t make the page wait for something the student doesn’t need to see.",
+            headline: "Don’t make students wait for something they don’t need to see.",
             why:
-              "A slow dependency inside the request takes threads with it. Moving the SMS to a queue contains the failure: the page stays fast, " +
-              "and the worker uses a timeout, backoff and a circuit breaker, so the backlog drains once the provider recovers.",
-            proof: "20 s × 400 / s = 8,000",
-            proofCaption: "threads needed if pages wait for a 20 s SMS. We have 300.",
+              "A slow partner inside the page drags every page down with it. Moving the text into a queue separates the two: " +
+              "the page stays fast, and the queue catches up once the SMS company recovers.",
+            picture: "A shop doesn’t keep you at the counter until your receipt has been emailed. You walk out, and the email follows.",
+            rule: "Keep slow partners out of the student’s path.",
             slide: "Slides 12–14"
           }
         },
         {
           id: "f5",
           quality: "availability",
+          slot: "Spare copy",
+          slotIcon: "copy",
           title: "One spare copy",
           prompt:
-            "Every request passes through the chain below. The app tier already has several servers. The budget allows one more redundant copy. Where does it go?",
-          chain: [
-            { name: "Load balancer", a: "99.99%" },
-            { name: "App servers", a: "≈ 100%", note: "already several" },
-            { name: "Cache", a: "99.9%" },
-            { name: "Database", a: "99.5%" }
-          ],
-          chainTotal: "Whole chain today: 99.39% (about 4.4 h down a month)",
+            "Every page passes through a front gateway, the servers, the fast memory and the database. The database breaks most often, and the server pool already has spares. You can afford one more spare copy. Where does it go?",
           options: [
-            { key: "A", verdict: "trap", text: "Two more app servers.",
-              why: "The app tier already has spares. The chain stays at 99.39%.", sim: { spare: "app" } },
-            { key: "B", verdict: "wrong", text: "A second load balancer.",
-              why: "It is already the strongest link: 99.39% → 99.40%.", sim: { spare: "lb" } },
-            { key: "C", verdict: "partial", text: "A second cache node.",
-              why: "A small gain: 99.39% → 99.49%.", sim: { spare: "cache" } },
-            { key: "D", verdict: "correct", text: "A database replica with automatic failover.",
-              why: "The weakest link: 99.39% → 99.89%, from about 4.4 hours to 49 minutes down a month.", sim: { spare: "db" } }
+            { key: "A", verdict: "trap", icon: "servers", name: "More spare servers",
+              text: "Add two more servers to the pool.",
+              why: "The pool already has spares, so this changes almost nothing.", sim: { spare: "app" } },
+            { key: "B", verdict: "wrong", icon: "network", name: "Second gateway",
+              text: "Add a second front gateway (load balancer).",
+              why: "The gateway almost never fails, so a spare there buys very little.", sim: { spare: "lb" } },
+            { key: "C", verdict: "partial", icon: "zap", name: "Second fast memory",
+              text: "Add a second copy of the fast memory (cache).",
+              why: "A small improvement, but it isn’t the weak spot.", sim: { spare: "cache" } },
+            { key: "D", verdict: "correct", icon: "dbTwin", name: "Database twin",
+              text: "Keep a live copy of the database that takes over automatically.",
+              why: "The weakest link now has a safety net: if one copy fails, its twin carries on.", sim: { spare: "db" } }
           ],
           reveal: {
-            headline: "Put the spare where the chain is weakest.",
+            headline: "Put the safety net under the weakest link.",
             why:
-              "In a chain where every part must work, the weakest part dominates. A database pair fails only if both copies are down at once: " +
-              "1 − 0.005² = 99.9975%. A spare for a part that is already strong buys almost nothing.",
-            proof: "99.39% → 99.89%",
-            proofCaption: "for the whole chain, with a database replica",
+              "A chain breaks at its weakest point. Strengthening parts that rarely fail barely helps. A twin for the database, " +
+              "the part that fails most often, removes the biggest risk.",
+            picture: "If a bridge has one rotten plank, you replace that plank, not the strong ones.",
+            rule: "Spares go where failures happen.",
             slide: "Slide 11"
           }
         },
         {
           id: "f6",
           quality: "modifiability",
+          slot: "Grading rules",
+          slotIcon: "blocks",
           title: "The grading rules",
           prompt:
-            "Most semesters the academic council adds or changes a rule: the best grade of a retake counts, grace marks, improvement exams. Today every rule lives in one 300-line if-else inside ResultService.",
+            "Most semesters the academic council adds or changes a rule: retakes, grace marks, improvement exams. Today every rule lives in one enormous if-else inside the result code.",
           options: [
-            { key: "A", verdict: "trap", text: "Keep the if-else, but add clear comments and more tests.",
-              why: "Comments help reading, not changing: every new rule still edits the core class and risks the others.",
+            { key: "A", verdict: "trap", icon: "comment", name: "Tidy the if-else",
+              text: "Keep the big if-else, but add clear comments and more tests.",
+              why: "Easier to read, but every new rule still means editing the core code and risking the others.",
               sim: { rules: "ifelse" } },
-            { key: "B", verdict: "correct", text: "Create a GradingRule interface. Each rule is its own class, and each curriculum’s list of rules is set in config and injected at start-up.",
-              why: "A new rule is one class with its own test, plus one config line. ResultService doesn’t change.",
-              sim: { rules: "strategy" } },
-            { key: "C", verdict: "wrong", text: "Copy ResultService for each curriculum: ResultService2022, ResultService2024, …",
-              why: "Every fix must be made in every copy, and one will be missed.", sim: { rules: "copies" } },
-            { key: "D", verdict: "partial", text: "Store the rules as formulas in a database table that admins edit live in a web form.",
-              why: "Changes are very fast, but an untested formula goes live for 40,000 students the moment it is saved.",
-              sim: { rules: "formula" } }
+            { key: "B", verdict: "correct", icon: "blocks", name: "Rule plug-ins",
+              text: "Make each rule its own small plug-in with a shared shape. Each curriculum simply lists the plug-ins it uses.",
+              why: "A new rule is one new plug-in with its own test. The result code never changes.", sim: { rules: "strategy" } },
+            { key: "C", verdict: "wrong", icon: "copy", name: "One copy per curriculum",
+              text: "Copy the result code for each curriculum and edit each copy.",
+              why: "Every fix must be repeated in every copy, and one will be missed.", sim: { rules: "copies" } },
+            { key: "D", verdict: "partial", icon: "table", name: "Live formula editor",
+              text: "Let admins type rules as formulas into a web form that goes live immediately.",
+              why: "Very quick to change, but untested rules reach every student the moment they are saved.", sim: { rules: "formula" } }
           ],
           reveal: {
             headline: "Make the thing that changes most the easiest thing to change.",
             why:
-              "One class per rule behind an interface gives high cohesion and keeps ResultService loosely coupled to the rules. " +
-              "Choosing rules in config defers binding to start-up. Live formulas defer it further but give up testing, too high a price for grades.",
-            proof: "1 class + 1 line",
-            proofCaption: "to add next semester’s rule",
+              "Rules change every semester, so each rule should be a separate piece that can be added and tested on its own. " +
+              "A live formula editor is quick, but skipping testing is too risky when the output is someone’s grades.",
+            picture: "A phone gets new abilities by installing apps, not by being rewired.",
+            rule: "Keep what changes separate from what doesn’t.",
             slide: "Slides 15–17"
           }
         },
         {
           id: "f7",
           quality: "security",
+          slot: "Login gate",
+          slotIcon: "lock",
           title: "Password spraying",
           prompt:
-            "Bots try the 20 most common passwords (123456, password, …) against thousands of sequential student IDs. Each ID gets only one or two tries, and the attempts come from hundreds of IP addresses.",
+            "Bots try the most common passwords, like 123456, on thousands of student IDs, which are printed on ID cards and go in order. Each account gets only one or two tries, from hundreds of different places.",
           options: [
-            { key: "A", verdict: "trap", text: "Limit each account to 5 attempts per minute, like FoodRush.",
+            { key: "A", verdict: "trap", icon: "shield", name: "Limit each account",
+              text: "Allow only a few tries per account each minute, just like the FoodRush fix.",
               why: "One or two tries per account never reaches the limit.", sim: { login: "peraccount" } },
-            { key: "B", verdict: "trap", text: "Lock an account after 3 wrong passwords.",
-              why: "It never triggers either, and it lets anyone lock a classmate out on result day.", sim: { login: "lockout" } },
-            { key: "C", verdict: "partial", text: "Show a CAPTCHA on every page, including the result page.",
-              why: "It slows the bots, but 40,000 students solve puzzles at peak, and CAPTCHA-solving services still get through.",
-              sim: { login: "captcha" } },
-            { key: "D", verdict: "correct", text: "Watch failed logins across all accounts, limit each network, alert on bursts, and ask for an OTP when a login looks unusual.",
-              why: "It sees the pattern a per-account limit can’t, and a second factor stops the guesses that get through.",
-              sim: { login: "layers" } }
+            { key: "B", verdict: "trap", icon: "ban", name: "Lock after 3 misses",
+              text: "Lock an account after three wrong passwords.",
+              why: "It never triggers either, and anyone can lock a classmate out on result day.", sim: { login: "lockout" } },
+            { key: "C", verdict: "partial", icon: "grid", name: "Puzzles everywhere",
+              text: "Make everyone solve a picture puzzle (a CAPTCHA) on every page.",
+              why: "It slows the bots a little, but 40,000 stressed students solve puzzles too.", sim: { login: "captcha" } },
+            { key: "D", verdict: "correct", icon: "activity", name: "Watch the whole gate",
+              text: "Watch for floods of failed logins across all accounts, slow down suspicious networks, alert staff, and ask for a phone code when a login looks unusual.",
+              why: "It spots the pattern no single account shows, and the phone code stops any lucky guesses.", sim: { login: "layers" } }
           ],
           reveal: {
-            headline: "The lecture’s fix fails when the attacker changes the shape of the attack.",
+            headline: "When the attack changes shape, one lock isn’t enough.",
             why:
-              "A per-account limit stops many guesses at one account. Spraying makes a few guesses at many accounts, so you only see it " +
-              "by watching the whole system. Defense in depth layers detection, rate limits and a second factor, so no single control has to be perfect.",
-            proof: "3,000 IDs × 1 try",
-            proofCaption: "never trips a per-account limit of 5",
+              "A per-account limit catches many guesses at one account. Spraying makes a few guesses at many accounts, so it only shows up " +
+              "when you watch everything together. Layers of defence mean no single lock has to be perfect.",
+            picture: "A thief who tries one door handle on every house in the street never rattles any single door. A neighbourhood watch sees the pattern.",
+            rule: "Layer your defences.",
             slide: "Slides 18–20"
           }
         },
         {
           id: "f8",
           quality: "security",
+          slot: "Result door",
+          slotIcon: "door",
           title: "Change one digit",
           prompt:
-            "After logging in, a student sees /result?id=221-15-4512 in the address bar. They change the last digit to 4513 and see a classmate’s grades.",
-          code: "GET /result?id=221-15-4512   →   GET /result?id=221-15-4513",
+            "After logging in, a student notices their own ID in the web address. They change the last digit and see a classmate’s grades.",
           options: [
-            { key: "A", verdict: "trap", text: "Encrypt the ID in the URL so nobody can guess another one.",
-              why: "The server still never checks who is asking. Encrypted links get forwarded in group chats and still work.",
+            { key: "A", verdict: "trap", icon: "shuffle", name: "Scramble the address",
+              text: "Scramble the ID in the web address so nobody can guess someone else’s.",
+              why: "The server still never checks who is asking. Scrambled links get shared in group chats and still work.",
               sim: { authz: "encrypt" } },
-            { key: "B", verdict: "wrong", text: "Send the ID with POST instead of GET, so it isn’t in the address bar.",
+            { key: "B", verdict: "wrong", icon: "eyeOff", name: "Hide the ID",
+              text: "Send the ID in a hidden way so it doesn’t appear in the address bar.",
               why: "It is one click away in the browser’s developer tools.", sim: { authz: "post" } },
-            { key: "C", verdict: "correct", text: "On every request, check that the logged-in student owns that ID, or is staff. Otherwise, deny.",
-              why: "Complete mediation with a fail-safe default: every request is checked, and the answer is no unless proven yes.",
-              sim: { authz: "check" } },
-            { key: "D", verdict: "wrong", text: "Check more carefully at login that the student is enrolled and active.",
-              why: "Login was never the problem. The bug is trusting every request after it.", sim: { authz: "login" } }
+            { key: "C", verdict: "correct", icon: "userCheck", name: "Check every request",
+              text: "Every time a result is asked for, check that it belongs to the logged-in student, or to staff. Otherwise, say no.",
+              why: "Every request is checked, and the answer is no unless it is clearly yes.", sim: { authz: "check" } },
+            { key: "D", verdict: "wrong", icon: "idCard", name: "Stricter login",
+              text: "Check more carefully at login that the student is real and enrolled.",
+              why: "Login was never the problem. The problem is trusting everything after it.", sim: { authz: "login" } }
           ],
           reveal: {
             headline: "Hiding the door is not the same as locking it.",
             why:
-              "This is information disclosure through a missing authorization check. Complete mediation says to check every request, " +
-              "not just the first, and fail-safe defaults say to deny unless access is explicitly allowed.",
-            proof: "0 results leaked",
-            proofCaption: "when every request is checked",
+              "The real bug is that nobody checks whether this student may see that result. Security has to check every request, " +
+              "not only the first one, and say no unless access is clearly allowed.",
+            picture: "An exam hall that checks ID cards at the gate but lets anyone open any locker inside isn’t secure.",
+            rule: "Check every request. Say no by default.",
             slide: "Slide 19"
           }
         }

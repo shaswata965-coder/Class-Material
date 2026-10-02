@@ -187,32 +187,32 @@ window.ResultDaySim = (function () {
     if (P.cache === "bigdb") bill.push(["Bigger database", 60000]);
     bill.push({ app: ["2 spare app servers", 20000], lb: ["Second load balancer", 5000], cache: ["Second cache node", 8000], db: ["Database replica", 25000] }[P.spare]);
     if (P.sms === "queue") bill.push(["SMS queue worker", 3000]);
-    if (P.login === "layers") bill.push(["Login monitoring + OTP", 4000]);
+    if (P.login === "layers") bill.push(["Login watch + phone codes", 4000]);
     if (P.login === "captcha") bill.push(["CAPTCHA service", 2000]);
     var billTotal = bill.reduce(function (s, b) { return s + b[1]; }, 0);
 
     /* ---- requirement verdict ---- */
     var req;
     if (P.req === "fast") {
-      req = { status: "bad", title: "Untestable requirement",
-        text: "“Fast and responsive” has no number, so nobody can say whether result day passed. The registrar and the developers argue about it for a week." };
+      req = { status: "bad", title: "Promise “fast and smooth”: can’t be checked",
+        text: "There is no number in it, so nobody can say whether result day passed. The registrar and the developers argue about it for a week." };
     } else if (P.req === "avg") {
       var passAvg = peakAvg <= 1;
       req = { status: passAvg ? (peakP99 > 1 ? "warn" : "good") : "bad",
-        title: "Average under 1 s: " + (passAvg ? "PASSED" : "FAILED"),
-        text: "Average during the rush: " + fmtLatency(peakAvg) + "." +
-          (passAvg && peakP99 > 1 ? " It passed on paper, yet p99 reached " + fmtLatency(peakP99) + ": about 1 student in 100, thousands of them over the rush, waited longer than that." : "") };
+        title: "Promise “good on average”: " + (passAvg ? "PASSED" : "FAILED"),
+        text: "The average page during the rush took " + fmtLatency(peakAvg) + "." +
+          (passAvg && peakP99 > 1 ? " It passed on paper, yet the slowest pages took " + fmtLatency(peakP99) + ": thousands of students waited that long." : "") };
     } else if (P.req === "p50normal") {
       req = { status: peakP99 > 1 ? "bad" : "warn",
-        title: "p50 under 200 ms at 20 req/s: PASSED",
-        text: "Tested at 09:57 on normal traffic: p50 = " + fmtLatency(p50Normal) + ". Result day ran at 800 requests per second, where p99 reached " +
-          fmtLatency(peakP99) + ". The test never looked at the load that mattered." };
+        title: "Promise “tested on a quiet day”: PASSED",
+        text: "At 09:57, with few visitors, pages were quick. In the 10:00 rush the slowest pages took " + fmtLatency(peakP99) +
+          ". The test never looked at the moment that mattered." };
     } else {
       var passP99 = peakP99 <= 1;
       req = { status: passP99 ? "good" : "bad",
-        title: "p99 under 1 s at 800 req/s: " + (passP99 ? "PASSED" : "FAILED"),
-        text: "Measured during the rush: p99 = " + fmtLatency(peakP99) + ". " +
-          (passP99 ? "Testable, tested, and met." : "Because the requirement was testable, everyone knows exactly what failed and by how much.") };
+        title: "Promise “99 in 100, even at the peak”: " + (passP99 ? "PASSED" : "FAILED"),
+        text: "In the rush, the slowest 1 in 100 pages took " + fmtLatency(peakP99) + ". " +
+          (passP99 ? "A clear promise, checked and kept." : "Because the promise was clear, everyone knows exactly what failed and by how much.") };
     }
 
     /* ---- mark sheet ---- */
@@ -226,14 +226,14 @@ window.ResultDaySim = (function () {
     var costL = billTotal <= 105000 ? "A+" : billTotal <= 130000 ? "A" : billTotal <= 160000 ? "B+" : billTotal <= 200000 ? "B" : billTotal <= 250000 ? "C" : "D";
 
     var rules = {
-      strategy: { lead: "1 day", risk: "Low: one new class with its own test" },
+      strategy: { lead: "1 day", risk: "Low: one new plug-in with its own test" },
       formula: { lead: "20 minutes", risk: "High: an untested formula goes live for everyone" },
-      ifelse: { lead: "3 weeks", risk: "High: edits the 300-line core class" },
+      ifelse: { lead: "3 weeks", risk: "High: edits the giant if-else in the core code" },
       copies: { lead: "2 weeks", risk: "High: three copies to patch" }
     }[P.rules];
 
     var courses = [
-      { code: "QA-101", name: "Performance", credits: 3, l: perfL, measured: "p99 in the rush: " + fmtLatency(rushP99) + " (target 1 s)" },
+      { code: "QA-101", name: "Performance", credits: 3, l: perfL, measured: "Slowest 1 in 100 pages at 10:00: " + fmtLatency(rushP99) + " (promise: 1 s)" },
       { code: "QA-102", name: "Availability", credits: 3, l: avL, measured: fmtPct(availability, 2) + " of requests served, 10:00–11:00" },
       { code: "QA-103", name: "Modifiability", credits: 2, l: modL, measured: "New grading rule: " + rules.lead + ". " + rules.risk },
       { code: "QA-104", name: "Security", credits: 3, l: secL, measured: fmtInt(last.compromised) + " accounts taken over, " + fmtInt(last.leaked) + " results exposed" },
@@ -269,14 +269,14 @@ window.ResultDaySim = (function () {
       body: "Traffic jumps from 20 to 800 requests per second." };
     if (x0.overloaded) {
       publish.status = "bad";
-      publish.out = "Overloaded: threads needed = 800 × " + x0.W.toFixed(2) + " s = " + fmtInt(x0.lambda * x0.W) + ", but only " + fmtInt(x0.threads) +
-        " exist. " + fmtPct(x0.served * 100, 0) + " of requests get through; the rest time out." + (P.autoscale ? " Auto-scaling has started new servers: 8 minutes to go." : "");
+      publish.out = "Overloaded: more students arrive than the servers can handle. About " + Math.round(x0.served * 10) + " in 10 pages load; the rest time out." +
+        (P.autoscale ? " Extra servers are starting, but they need 8 minutes." : "");
     } else if (R.metrics.rushP99 > 1) {
       publish.status = "warn";
-      publish.out = "Slow: threads are " + fmtPct(x0.rho * 100, 0) + " busy and p99 is " + fmtLatency(R.metrics.rushP99) + ", above the 1 s target.";
+      publish.out = "Slow: the servers are " + fmtPct(x0.rho * 100, 0) + " busy, and the slowest pages take " + fmtLatency(R.metrics.rushP99) + ", more than the 1-second promise.";
     } else {
       publish.status = "good";
-      publish.out = "Holding: threads are " + fmtPct(x0.rho * 100, 0) + " busy and p99 is " + fmtLatency(R.metrics.rushP99) + ".";
+      publish.out = "Holding: the servers are only " + fmtPct(x0.rho * 100, 0) + " busy, and even the slowest pages take " + fmtLatency(R.metrics.rushP99) + ".";
     }
     ev.push(publish);
 
@@ -304,7 +304,7 @@ window.ResultDaySim = (function () {
       out: P.spare === "db" ? "The replica takes over in about 10 seconds." : "No replica. Every login and result page fails until 10:35." + spareNote });
 
     var urlOut = {
-      check: ["good", "403 Forbidden. The attempt is logged and nothing leaks."],
+      check: ["good", "Access denied. The attempt is logged and nothing leaks."],
       encrypt: ["bad", "The server never checks who is asking. Encrypted links shared in group chats open other students’ results."],
       post: ["bad", "They copy the request from developer tools and change the ID. By 11:00 a script has downloaded every result."],
       login: ["bad", "They are logged in, so every request is trusted. By 11:00 a script has downloaded every result."]
@@ -313,7 +313,7 @@ window.ResultDaySim = (function () {
       body: "They try 221-15-4513, a classmate’s ID.", status: urlOut[0], out: urlOut[1] });
 
     var sprayOut = {
-      layers: ["good", "Detected within a minute. Networks are rate-limited, operators are alerted, and an OTP stops the 2 guesses that were right."],
+      layers: ["good", "Spotted within a minute: suspicious networks are slowed down, staff are alerted, and a phone code stops the 2 lucky guesses."],
       captcha: ["warn", "The CAPTCHA blocks most bots, but solving services get some through, and every student has to solve puzzles."],
       peraccount: ["bad", "No account ever reaches 5 attempts. About 60 accounts are taken over by 10:54."],
       lockout: ["bad", "No account ever reaches 3 wrong passwords. About 60 accounts are taken over by 10:54."]
@@ -322,10 +322,10 @@ window.ResultDaySim = (function () {
       body: "6,000 login attempts a minute, 1–2 per student ID, from hundreds of IP addresses.", status: sprayOut[0], out: sprayOut[1] });
 
     var rulesOut = {
-      strategy: ["good", "GraceMarkRule: one new class, its own test and one config line. Ready tomorrow."],
+      strategy: ["good", "A grace-mark plug-in with its own test, added to the list. Ready tomorrow."],
       formula: ["warn", "An admin can type the formula in 20 minutes, but it goes live for 40,000 students untested."],
-      ifelse: ["bad", "Edit the 300-line if-else, retest every rule and redeploy everything: about 3 weeks."],
-      copies: ["bad", "Patch three copies of ResultService and hope none is missed: about 2 weeks."]
+      ifelse: ["bad", "Edit the giant if-else, retest every rule and release everything again: about 3 weeks."],
+      copies: ["bad", "Patch every copy of the result code and hope none is missed: about 2 weeks."]
     }[P.rules];
     ev.push({ m: 56, id: "rules", label: "Rules", title: "Email from the academic council",
       body: "Next semester: grace marks for anyone within 2 marks of passing.", status: rulesOut[0], out: rulesOut[1] });
@@ -372,19 +372,19 @@ window.ResultDaySim = (function () {
     else f.push({ m: 16, who: "@arif.eee", text: "ResultHub is completely down now??", mood: "down" });
     mood(24);
     if (P.spare !== "db") f.push({ m: 30, who: "@farhan.dev", text: "15 minutes of “Service unavailable”. Classic.", mood: "down" });
-    if (P.authz === "check") f.push({ m: 39, who: "@shuvo.textile", text: "Tried changing the ID in the link for fun. “403 Forbidden.” Fair enough.", mood: "good" });
+    if (P.authz === "check") f.push({ m: 39, who: "@shuvo.textile", text: "Tried changing the ID in the link for fun. “Access denied.” Fair enough.", mood: "good" });
     else f.push({ m: 39, who: "@priya.pharm", text: "Why can I see my roommate’s grades by changing the link??", mood: "down" });
     if (P.authz === "encrypt") f.push({ m: 47, who: "@batch221.official", text: "Links that open other people’s results are going around in Messenger groups…", mood: "down" });
     if (P.authz === "post" || P.authz === "login") f.push({ m: 46, who: "@batch221.official", text: "Someone posted a spreadsheet with EVERY student’s CGPA in the batch group…", mood: "down" });
-    if (P.login === "layers") f.push({ m: 44, who: "@nusrat.arch", text: "Got an OTP for a login I didn’t make. Glad it asked!", mood: "good" });
+    if (P.login === "layers") f.push({ m: 44, who: "@nusrat.arch", text: "Got a phone code for a login I didn’t make. Glad it asked!", mood: "good" });
     if (P.login === "captcha") f.push({ m: 45, who: "@sakib.me", text: "Clicked every traffic light three times to see a C+.", mood: "slow" });
     if (P.login === "peraccount" || P.login === "lockout") f.push({ m: 50, who: "@jahid.civil", text: "Someone logged into my account and changed my phone number??", mood: "down" });
     mood(52);
     var rulesPost = {
-      strategy: ["@it.helpdesk", "The council’s new rule ships tomorrow. One class and a config line.", "good"],
+      strategy: ["@it.helpdesk", "The council’s new rule ships tomorrow. One new plug-in, nothing else touched.", "good"],
       formula: ["@it.helpdesk", "Typing the new grading rule straight into production. What could go wrong?", "slow"],
       ifelse: ["@it.helpdesk", "New grading rule? See you in three weeks.", "down"],
-      copies: ["@it.helpdesk", "New grading rule. Which of the three ResultService copies is the real one?", "down"]
+      copies: ["@it.helpdesk", "New grading rule. Which copy of the result code is the real one?", "down"]
     }[P.rules];
     f.push({ m: 57, who: rulesPost[0], text: rulesPost[1], mood: rulesPost[2] });
     f.sort(function (a, b) { return a.m - b.m; });
@@ -394,21 +394,21 @@ window.ResultDaySim = (function () {
   /* ------------------------------------------------------------------ insights */
   function buildInsights(R) {
     var P = R.params, ins = [];
-    if (P.cache === "warm" && P.servers < 6) ins.push({ q: "performance", html: "<b>Making W smaller beat adding servers.</b> The warm cache cut each request to 0.05 s, so only 800 × 0.05 = 40 threads were busy at peak. Even " + (P.autoscale ? "2" : "4") + " servers coped." });
-    if (P.cache === "warm" && P.servers === 16) ins.push({ q: "performance", html: "<b>Most of the 16 servers sat idle.</b> With the warm cache only 40 of 800 threads were busy at peak (5%). Two servers would have done." });
-    if (P.cache === "aside") ins.push({ q: "performance", html: "<b>The cache was cold when it mattered.</b> At 10:00 almost every request was a first view, so cache-aside missed and the database took the full rush. It only helped after 10:10, when students refreshed." });
-    if (P.cache === "threads") ins.push({ q: "performance", html: "<b>More threads made the database thrash.</b> Four times the connections hit the database at once, and each request slowed to about 0.9 s during the rush." });
-    if (P.cache === "bigdb") ins.push({ q: "performance", html: "<b>The bigger database helped a little, at a high price.</b> Requests dropped from 250 to about 210 ms, for ৳60,000 more a month." });
-    if (!P.autoscale && P.servers === 4 && P.cache !== "warm") ins.push({ q: "performance", html: "<b>“Exactly enough” ran out.</b> With 4 servers the pool ran at 85% busy or more, and waiting exploded: W = S ÷ (1 − ρ)." });
-    if (P.autoscale && P.cache !== "warm") ins.push({ q: "performance", html: "<b>Auto-scaling arrived late.</b> The new servers came online at 10:08, after most of the rush had timed out." });
+    if (P.cache === "warm" && P.servers < 6) ins.push({ q: "performance", html: "<b>Making each page faster beat buying servers.</b> With every result prepared in advance, each page took a fraction of the time, so even the smaller pool coped." });
+    if (P.cache === "warm" && P.servers === 16) ins.push({ q: "performance", html: "<b>Most of the 16 servers sat idle.</b> With results prepared in advance, the pool was only about 5% busy at the peak. A much smaller pool would have done." });
+    if (P.cache === "aside") ins.push({ q: "performance", html: "<b>Nothing was remembered when it mattered.</b> At 10:00 almost every visit was a first visit, so the database did all the work. Remembering only helped after 10:10, when students refreshed." });
+    if (P.cache === "threads") ins.push({ q: "performance", html: "<b>More workers made the database slower.</b> Four times as many requests hit the database at once, and every page slowed down for everyone." });
+    if (P.cache === "bigdb") ins.push({ q: "performance", html: "<b>The bigger database helped a little, at a high price.</b> Pages got slightly faster, and the monthly bill jumped." });
+    if (!P.autoscale && P.servers === 4 && P.cache !== "warm") ins.push({ q: "performance", html: "<b>“Exactly enough” ran out.</b> The servers were almost never idle, so every small burst turned into a queue that kept growing." });
+    if (P.autoscale && P.cache !== "warm") ins.push({ q: "performance", html: "<b>The extra servers arrived too late.</b> They came online at 10:08, after most of the rush had already timed out." });
     if (P.sms === "sync" || P.sms === "retry") ins.push({ q: "availability", html: "<b>One slow dependency stopped everything.</b> From 10:07 to 10:27 every page waited for the SMS provider, so the threads ran out and the portal froze." });
     if (P.spare !== "db") ins.push({ q: "availability", html: "<b>The weakest link failed.</b> The database outage took the portal down for 20 minutes. A replica would have taken over in seconds." });
     if (P.rules === "formula") ins.push({ q: "modifiability", html: "<b>Fast to change, risky to change.</b> Live formulas skip testing, so one typo reaches every student at once." });
-    if (P.rules === "ifelse" || P.rules === "copies") ins.push({ q: "modifiability", html: "<b>The rule that changes every semester was the hardest thing to change.</b> One class per rule behind an interface would make it a one-day job." });
+    if (P.rules === "ifelse" || P.rules === "copies") ins.push({ q: "modifiability", html: "<b>The rule that changes every semester was the hardest thing to change.</b> Rule plug-ins would have made it a one-day job." });
     if (P.login === "peraccount" || P.login === "lockout") ins.push({ q: "security", html: "<b>No single account ever looked attacked.</b> One or two tries per ID stayed under every per-account limit." });
     if (P.login === "captcha") ins.push({ q: "security", html: "<b>The CAPTCHA taxed every student to slow the bots.</b> About 1 in 10 students failed it the first time." });
     if (P.authz !== "check") ins.push({ q: "security", html: "<b>Nobody checked who was asking.</b> Authorization has to happen on every request, not once at login." });
-    if (!ins.length) ins.push({ q: "performance", html: "<b>Every decision held up.</b> A warm cache, a sensible pool, a contained SMS dependency, a database replica and layered security: result day was boring, which is the goal." });
+    if (!ins.length) ins.push({ q: "performance", html: "<b>Every part held up.</b> Results prepared in advance, room to breathe, SMS sent later, a database twin and layered security: result day was boring, which is exactly the goal." });
     return ins;
   }
 
@@ -437,7 +437,7 @@ window.ResultDaySim = (function () {
     // target line
     var ty = cy(1).toFixed(1);
     s.push('<line x1="' + CH.ml + '" x2="' + (CH.w - CH.mr) + '" y1="' + ty + '" y2="' + ty + '" style="stroke:var(--ink-2);stroke-width:1.5;stroke-dasharray:6 5"/>');
-    s.push('<text x="' + (CH.w - CH.mr - 2) + '" y="' + (cy(1) - 6).toFixed(1) + '" text-anchor="end" style="fill:var(--ink-2);font-weight:700">1 s target</text>');
+    s.push('<text x="' + (CH.w - CH.mr - 2) + '" y="' + (cy(1) - 6).toFixed(1) + '" text-anchor="end" style="fill:var(--ink-2);font-weight:700">1 s promise</text>');
     // event markers (only those reached)
     var row = 0;
     R.events.forEach(function (e) {
@@ -477,8 +477,8 @@ window.ResultDaySim = (function () {
 
   function chartLegend() {
     return '<div class="legend">' +
-      '<span><i style="background:var(--avail)"></i>p99 latency (log scale)</span>' +
-      '<span><i style="background:repeating-linear-gradient(90deg,var(--ink-2) 0 5px,transparent 5px 9px)"></i>1 s target</span>' +
+      '<span><i style="background:var(--avail)"></i>Slowest 1 in 100 pages (p99)</span>' +
+      '<span><i style="background:repeating-linear-gradient(90deg,var(--ink-2) 0 5px,transparent 5px 9px)"></i>1-second promise</span>' +
       '<span><i class="sq" style="background:var(--good)"></i>Served ≥ 99.5%</span>' +
       '<span><i class="sq" style="background:var(--warn)"></i>80–99.5%</span>' +
       '<span><i class="sq" style="background:var(--bad)"></i>Under 80%</span>' +
@@ -502,7 +502,7 @@ window.ResultDaySim = (function () {
       var line = svg.querySelector(".xh");
       var lx = cx(m + 0.5);
       line.setAttribute("x1", lx); line.setAttribute("x2", lx); line.style.opacity = ".5";
-      tip.innerHTML = "<b>" + clock(m) + "</b> · " + fmtInt(x.lambda) + " req/s<br>p99 " + fmtLatency(x.p99) + " · served " + fmtPct(x.served * 100, 0);
+      tip.innerHTML = "<b>" + clock(m) + "</b> · " + fmtInt(x.lambda) + " requests/s<br>slowest pages " + fmtLatency(x.p99) + " · served " + fmtPct(x.served * 100, 0);
       var wr = wrap.getBoundingClientRect();
       tip.style.left = (r.left - wr.left + lx / CH.w * r.width + wrap.scrollLeft) + "px";
       tip.style.top = (r.top - wr.top + (x.p99 == null ? CH.mt + 30 : cy(x.p99)) / CH.h * r.height) + "px";
@@ -528,9 +528,9 @@ window.ResultDaySim = (function () {
     }).join("");
     function tile(k, v, n, st) { return '<div class="tile ' + (st || "") + '"><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="n">' + n + "</div></div>"; }
     var smsText = P.sms === "none" ? "Not sent" : fmtInt(M.smsDelivered);
-    var smsNote = { queue: "All sent; some up to 20 min late", sync: "Sent, but pages froze while waiting", retry: "Sent, with duplicate texts", none: "Guardians were never told" }[P.sms];
+    var smsNote = { queue: "All sent, some up to 20 minutes late", sync: "Sent, but pages froze while waiting", retry: "Sent, with duplicate texts", none: "Guardians were never told" }[P.sms];
     var tiles =
-      tile("p99 in the rush", fmtLatency(M.rushP99), "Target: 1 s at 800 req/s", M.rushP99 <= 1 ? "good" : M.rushP99 <= 3 ? "warn" : "bad") +
+      tile("Slowest pages at 10:00", fmtLatency(M.rushP99), "99 of 100 pages were faster. Promise: 1 s", M.rushP99 <= 1 ? "good" : M.rushP99 <= 3 ? "warn" : "bad") +
       tile("Requests served", fmtPct(M.availability, 2), "10:00 to 11:00", M.availability >= 99 ? "good" : M.availability >= 90 ? "warn" : "bad") +
       tile("Saw their result first try", fmtInt(M.studentsOk), "of 40,000 students", M.studentsOk >= 38000 ? "good" : M.studentsOk >= 30000 ? "warn" : "bad") +
       tile("Accounts taken over", fmtInt(M.compromised), P.login === "layers" ? fmtInt(M.attemptsBlocked) + " attempts blocked" : "by password spraying", M.compromised === 0 ? "good" : M.compromised <= 10 ? "warn" : "bad") +
@@ -560,7 +560,7 @@ window.ResultDaySim = (function () {
           '<div class="card" style="display:grid;gap:14px"><div class="eyebrow">What happened</div><ul class="outcomes">' + outcomes + "</ul></div>" +
         "</div>" +
       "</div>" +
-      '<div class="card timeline-card"><div class="lbl"><span>p99 latency and requests served, 09:55 to 11:00</span><span>Hover for details</span></div>' +
+      '<div class="card timeline-card"><div class="lbl"><span>How long the slowest pages took, 09:55 to 11:00</span><span>Hover for details</span></div>' +
       '<div class="chart-wrap" data-chart>' + chartSVG(R, END - 1) + "</div>" + chartLegend() + "</div>";
   }
 
@@ -607,13 +607,13 @@ window.ResultDaySim = (function () {
             '<span><i class="sq" style="background:' + COLORS.bad + ';border-radius:50%"></i>Failed</span>' +
             '<span><i class="sq" style="background:' + COLORS.sms + ';border-radius:50%"></i>Guardian SMS</span>' +
             '<span><i class="sq" style="background:' + COLORS.attack + ';border-radius:50%"></i>Bot login attempt</span></div>' +
-          '<div class="card timeline-card"><div class="lbl"><span>p99 latency and requests served</span><span>Log scale</span></div>' +
+          '<div class="card timeline-card"><div class="lbl"><span>How long the slowest pages took</span><span>Log scale</span></div>' +
             '<div class="chart-wrap" data-chart></div>' + chartLegend() + "</div>" +
         "</div>" +
         '<aside class="gauges">' +
           '<div class="clock"><span class="phase" data-phase>Before results</span><span class="time" data-clock>09:55</span><span class="phase" data-lambda>20 requests / s</span></div>' +
-          '<div class="gauge"><div class="lbl"><span>p99 right now</span><span>target 1 s</span></div><div class="val" data-p99>–</div><div class="state" data-p99s></div></div>' +
-          '<div class="gauge"><div class="lbl"><span>Threads busy (<span class="nocase">ρ</span>)</span><span data-rhot></span></div><div class="meter"><i data-rho></i><span class="mark" style="left:65%" data-l="65%"></span></div><div style="height:12px"></div></div>' +
+          '<div class="gauge"><div class="lbl"><span>Slowest pages now</span><span>promise 1 s</span></div><div class="val" data-p99>–</div><div class="state" data-p99s></div></div>' +
+          '<div class="gauge"><div class="lbl"><span>Servers busy</span><span data-rhot></span></div><div class="meter"><i data-rho></i><span class="mark" style="left:65%" data-l="65%"></span></div><div style="height:12px"></div></div>' +
           '<div class="gauge-pair">' +
             '<div class="gauge"><div class="lbl"><span>Served</span></div><div class="val" data-served>–</div></div>' +
             '<div class="gauge"><div class="lbl"><span>Got results</span></div><div class="val" data-students>0</div></div>' +
