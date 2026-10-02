@@ -658,6 +658,7 @@ button.part:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 2p
 .srv { position: relative; aspect-ratio: 1.6; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
 .srv i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--good); transition: height .4s, background .4s; }
 .srv.new { animation: stamp .5s var(--ease-pop) both; }
+.srv.failed { outline: 2px solid var(--bad); outline-offset: 1px; }
 .node.students { background: var(--perf-tint); border-color: transparent; }
 .node.bot { background: var(--sec-tint); border-color: var(--sec); color: var(--sec); }
 .node.shielded::after {

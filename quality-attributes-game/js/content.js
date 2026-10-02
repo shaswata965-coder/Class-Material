@@ -29,8 +29,8 @@
         kicker: "Round 1 · Warm-up",
         name: "Eid Ticket Rush",
         when: "Before the lecture",
-        tagline: "Build a ticket system part by part. Gut feeling will try to trick you.",
-        story: "Eid bus tickets go on sale at 9:00. Last year the site crashed in minutes. Build this year’s system, one part per turn.",
+        tagline: "Build a ticket system part by part, then watch it face sale day. Gut feeling will try to trick you.",
+        story: "Eid bus tickets go on sale at 9:00. Last year the site crashed in minutes. Build this year’s system, one part per turn, then watch it face sale day.",
         facts: [
           { k: "Sale opens", v: "Friday 9:00" },
           { k: "The crowd", v: "Everyone at once" },
@@ -53,13 +53,13 @@
             demo: { kind: "grid100" },
             options: [
               { key: "A", verdict: "trap", icon: "barChart", name: "Average time", text: "Counts every booking fairly",
-                why: "Hides the few who wait ages", demo: { variant: "avg" } },
+                why: "Hides the few who wait ages", sim: { metric: "avg" }, demo: { variant: "avg" } },
               { key: "B", verdict: "wrong", icon: "cpu", name: "Server load", text: "Measures the machine directly",
-                why: "A calm server can still keep people waiting", demo: { variant: "cpu" } },
+                why: "A calm server can still keep people waiting", sim: { metric: "cpu" }, demo: { variant: "cpu" } },
               { key: "C", verdict: "trap", icon: "gauge", name: "Typical time", text: "Ignores freak outliers",
-                why: "The “outliers” are real, angry customers", demo: { variant: "median" } },
+                why: "The “outliers” are real, angry customers", sim: { metric: "median" }, demo: { variant: "median" } },
               { key: "D", verdict: "correct", icon: "target", name: "Slowest 1 in 100", text: "Judged by our worst moments",
-                why: "Catches the customers who give up", demo: { variant: "p99" } }
+                why: "Catches the customers who give up", sim: { metric: "p99" }, demo: { variant: "p99" } }
             ],
             reveal: { headline: "Averages hide the people who suffer.", rule: "Measure the slowest, not the average.",
               why: "On sale day, “1 in 100” is hundreds of real people.", slide: "Slide 5" }
@@ -76,16 +76,16 @@
             options: [
               { key: "A", verdict: "correct", icon: "zap", name: "Cache the fare list", text: "Copy may be an hour old",
                 why: "Most bookings skip the slow step",
-                demo: { stages: [WORKERS, { id: "cache", label: "Cache", icon: "zap", cache: { hit: 0.85 } }, DB] } },
+                sim: { engine: "cache" }, demo: { stages: [WORKERS, { id: "cache", label: "Cache", icon: "zap", cache: { hit: 0.85 } }, DB] } },
               { key: "B", verdict: "trap", icon: "userPlus", name: "Double the workers", text: "Twice the bookings at once",
                 why: "More workers queue at the same database",
-                demo: { stages: [ext(WORKERS, { label: "Workers ×2", icon: "userPlus", slots: 8 }), DB] } },
+                sim: { engine: "workers" }, demo: { stages: [ext(WORKERS, { label: "Workers ×2", icon: "userPlus", slots: 8 }), DB] } },
               { key: "C", verdict: "wrong", icon: "cpu", name: "Faster web server", text: "More power for every booking",
                 why: "The slow part is the database",
-                demo: { stages: [ext(WORKERS, { label: "Fast server", icon: "cpu", big: true, service: 0.08 }), DB] } },
+                sim: { engine: "fast" }, demo: { stages: [ext(WORKERS, { label: "Fast server", icon: "cpu", big: true, service: 0.08 }), DB] } },
               { key: "D", verdict: "wrong", icon: "hourglass", name: "Virtual waiting room", text: "Orderly, fair, no crashes",
                 why: "Polite waiting is still waiting",
-                demo: { stages: [{ id: "room", label: "Waiting room", icon: "hourglass", slots: 30, service: 1.1 }, WORKERS, DB] } }
+                sim: { engine: "room" }, demo: { stages: [{ id: "room", label: "Waiting room", icon: "hourglass", slots: 30, service: 1.1 }, WORKERS, DB] } }
             ],
             reveal: { headline: "More workers can’t fix a slow step. Removing it can.", rule: "Shorten the work, don’t just add workers.",
               why: "How crowded it gets depends on how long each booking takes.", slide: "Slides 6–9" }
@@ -102,7 +102,7 @@
             options: [
               { key: "A", verdict: "trap", icon: "pieces", name: "Five microservices", text: "Modern: every part independent",
                 why: "Five links, any one stops a booking",
-                demo: {
+                sim: { setup: "micro5" }, demo: {
                   stages: [
                     { id: "login", label: "Login", icon: "lock", slots: 3, service: 0.25 },
                     { id: "search", label: "Search", icon: "search", slots: 3, service: 0.25 },
@@ -114,13 +114,13 @@
                 } },
               { key: "B", verdict: "correct", icon: "copy", name: "Two identical servers", text: "Pay double; one mostly idle",
                 why: "One falls, the other keeps selling",
-                demo: { stages: [{ id: "srv", label: "Servers ×2", icon: "server", copies: 2, slots: 3, service: 0.35 }], stress: { stages: { srv: { fail: { at: 2.5, copy: 0 } } } } } },
+                sim: { setup: "two" }, demo: { stages: [{ id: "srv", label: "Servers ×2", icon: "server", copies: 2, slots: 3, service: 0.35 }], stress: { stages: { srv: { fail: { at: 2.5, copy: 0 } } } } } },
               { key: "C", verdict: "wrong", icon: "hardDrive", name: "One premium server", text: "Top-grade, rarely fails",
                 why: "Rarely is not never",
-                demo: { stages: [{ id: "srv", label: "Premium", icon: "hardDrive", big: true, slots: 6, service: 0.3 }], stress: { stages: { srv: { fail: { at: 2.5 } } } } } },
+                sim: { setup: "premium" }, demo: { stages: [{ id: "srv", label: "Premium", icon: "hardDrive", big: true, slots: 6, service: 0.3 }], stress: { stages: { srv: { fail: { at: 2.5 } } } } } },
               { key: "D", verdict: "wrong", icon: "moon", name: "Nightly fresh restart", text: "Clean start every morning",
                 why: "Crashes don’t wait for night",
-                demo: { stages: [{ id: "srv", label: "Server", icon: "server", badge: "moon", slots: 3, service: 0.35 }], stress: { stages: { srv: { fail: { at: 2.5 } } } } } }
+                sim: { setup: "nightly" }, demo: { stages: [{ id: "srv", label: "Server", icon: "server", badge: "moon", slots: 3, service: 0.35 }], stress: { stages: { srv: { fail: { at: 2.5 } } } } } }
             ],
             reveal: { headline: "A chain breaks at any link. A spare keeps going.", rule: "Chains multiply risk. Spares divide it.",
               why: "Five parts in a row fail more often than one; two copies fail only together.", slide: "Slide 11" }
@@ -139,15 +139,15 @@
             },
             options: [
               { key: "A", verdict: "trap", icon: "hourglass", name: "Wait patiently", text: "Never lose a payment",
-                why: "Workers pile up; card payments stop too", demo: { stages: [WALLET_STAGE] } },
+                why: "Workers pile up; card payments stop too", sim: { wallet: "wait" }, demo: { stages: [WALLET_STAGE] } },
               { key: "B", verdict: "trap", icon: "refresh", name: "Retry instantly", text: "Keep trying until it works",
                 why: "Floods a company that’s already struggling",
-                demo: { stages: [ext(WALLET_STAGE, { timeout: 0.9, onTimeout: "retry", retries: 6 })] } },
+                sim: { wallet: "retry" }, demo: { stages: [ext(WALLET_STAGE, { timeout: 0.9, onTimeout: "retry", retries: 6 })] } },
               { key: "C", verdict: "wrong", icon: "userPlus", name: "More workers", text: "Room for the slow ones",
-                why: "More workers just wait longer", demo: { stages: [ext(WALLET_STAGE, { slots: 8, label: "Workers ×2" })] } },
+                why: "More workers just wait longer", sim: { wallet: "more" }, demo: { stages: [ext(WALLET_STAGE, { slots: 8, label: "Workers ×2" })] } },
               { key: "D", verdict: "correct", icon: "timer", name: "Time limit, then back off", text: "Some see “payment pending”",
                 why: "Workers stay free for everyone else",
-                demo: { stages: [ext(WALLET_STAGE, { timeout: 1.0, onTimeout: "pending", breaker: 3 })] } }
+                sim: { wallet: "timeout" }, demo: { stages: [ext(WALLET_STAGE, { timeout: 1.0, onTimeout: "pending", breaker: 3 })] } }
             ],
             reveal: { headline: "A slow partner can freeze everything.", rule: "Every outside call needs a time limit.",
               why: "A call that never times out holds a worker hostage.", slide: "Slides 10–14" }
@@ -159,13 +159,13 @@
             demo: { kind: "code", base: { item: "wallet", core: "card" } },
             options: [
               { key: "A", verdict: "trap", icon: "branch", name: "One more if-else", text: "Five lines, live today",
-                why: "Every wallet edits the core again", demo: { variant: "ifelse" } },
+                why: "Every wallet edits the core again", sim: { pay: "ifelse" }, demo: { variant: "ifelse" } },
               { key: "B", verdict: "correct", icon: "plug", name: "Plug-in socket", text: "Slower first time: build the socket",
-                why: "New wallets plug in; core never changes", demo: { variant: "plugin" } },
+                why: "New wallets plug in; core never changes", sim: { pay: "plugin" }, demo: { variant: "plugin" } },
               { key: "C", verdict: "wrong", icon: "copy", name: "Copy & customise", text: "Old code stays untouched",
-                why: "Every fix needed in every copy", demo: { variant: "copy" } },
+                why: "Every fix needed in every copy", sim: { pay: "copy" }, demo: { variant: "copy" } },
               { key: "D", verdict: "wrong", icon: "link", name: "Give them DB access", text: "No code change for us",
-                why: "Outsiders now touch our data", demo: { variant: "direct" } }
+                why: "Outsiders now touch our data", sim: { pay: "direct" }, demo: { variant: "direct" } }
             ],
             reveal: { headline: "Build sockets, not special cases.", rule: "What changes often should plug in.",
               why: "Each if-else ties the core to one more company.", slide: "Slides 15–17" }
@@ -177,13 +177,13 @@
             demo: { kind: "gate", base: { attack: "guess" } },
             options: [
               { key: "A", verdict: "trap", icon: "password", name: "Strong-password rule", text: "Long, complex passwords only",
-                why: "Leaked passwords already work", demo: { variant: "strongpw" } },
+                why: "Leaked passwords already work", sim: { login: "strongpw" }, demo: { variant: "strongpw" } },
               { key: "B", verdict: "trap", icon: "ban", name: "Lock after 3 misses", text: "Bots locked out fast",
-                why: "Bots can lock out real customers", demo: { variant: "lockout" } },
+                why: "Bots can lock out real customers", sim: { login: "lockout" }, demo: { variant: "lockout" } },
               { key: "C", verdict: "correct", icon: "shieldCheck", name: "Slow down + alert", text: "Real users may wait a minute",
-                why: "Guessing crawls and staff are alerted", demo: { variant: "ratelimit" } },
+                why: "Guessing crawls and staff are alerted", sim: { login: "ratelimit" }, demo: { variant: "ratelimit" } },
               { key: "D", verdict: "wrong", icon: "eyeOff", name: "Hidden login page", text: "Can’t attack what they can’t find",
-                why: "Bots find it within minutes", demo: { variant: "hidden" } }
+                why: "Bots find it within minutes", sim: { login: "hidden" }, demo: { variant: "hidden" } }
             ],
             reveal: { headline: "The strictest rule can become the attacker’s weapon.", rule: "Slow the attacker, not the customer.",
               why: "Lockout lets an attacker lock out real customers on purpose.", slide: "Slides 18–20" }

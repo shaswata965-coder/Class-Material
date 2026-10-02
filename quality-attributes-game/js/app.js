@@ -83,7 +83,7 @@
   function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* storage unavailable: keep going */ } }
 
   var state = load() || freshState();
-  var ui = { selected: null, demo: null, demoTab: null, locking: false, justPlaced: null, timer: null, timerTick: 0, drawer: false, armed: null, armTimer: 0, sim: null, simResult: null, shownScores: {} };
+  var ui = { selected: null, demo: null, demoTab: null, locking: false, justPlaced: null, timer: null, timerTick: 0, drawer: false, armed: null, armTimer: 0, sim: null, simRound: null, simResult: {}, shownScores: {} };
 
   /* ------------------------------------------------------------------ helpers */
   function esc(s) {
@@ -237,18 +237,18 @@
   function render() {
     var rid = currentRound();
     var stage = rid ? state.rounds[rid].stage : null;
-    if (ui.sim && !(rid === "final" && stage === "sim")) { ui.sim.destroy(); ui.sim = null; }
+    if (ui.sim && !(stage === "sim" && ui.simRound === rid)) { ui.sim.destroy(); ui.sim = null; }
     applyTeamStyles();
     renderTop();
     renderDrawer();
-    if (rid === "final" && stage === "sim" && ui.sim) return;   // keep the running simulation
+    if (stage === "sim" && ui.sim) return;   // keep the running simulation
     var html;
     if (!rid) html = homeHTML();
     else if (stage === "intro") html = introHTML(rid);
     else if (stage === "play") html = playHTML(rid);
     else if (stage === "done") html = doneHTML(rid);
     else if (stage === "sim") html = '<section class="screen" id="sim-root"></section>';
-    else if (stage === "report") html = reportScreenHTML();
+    else if (stage === "report") html = reportScreenHTML(rid);
     else if (stage === "reveal") html = revealHTML(rid);
     else if (stage === "scores") html = scoresHTML(rid);
     var r = rid ? state.rounds[rid] : null;
@@ -263,12 +263,13 @@
 
   function afterRender(rid, stage, settled) {
     if (stage === "sim") {
-      ui.simResult = SIM.compute(simParams());
-      ui.sim = SIM.mount(document.getElementById("sim-root"), ui.simResult, {
-        onReport: function () { state.rounds.final.stage = "report"; save(); render(); scrollTop(); }
+      ui.simResult[rid] = SIM.compute(simParams(rid), rid);
+      ui.simRound = rid;
+      ui.sim = SIM.mount(document.getElementById("sim-root"), ui.simResult[rid], {
+        onReport: function () { state.rounds[rid].stage = "report"; save(); render(); scrollTop(); }
       });
     }
-    if (stage === "report") SIM.attachReport($app, ui.simResult || SIM.compute(simParams()));
+    if (stage === "report") SIM.attachReport($app, simResultFor(rid));
     if (stage === "scores") {
       var fills = $app.querySelectorAll(".fill[data-w]");
       if (settled) fills.forEach(function (f) { f.style.transition = "none"; f.style.width = f.dataset.w; });
@@ -341,7 +342,7 @@
           '<span class="muted" style="font-size:14px">As many as you like. Teams take turns, one decision each.</span></div></div>' +
         '<div class="card" style="display:grid;gap:18px"><h2 style="font-size:26px">How to run it</h2><ol class="steps">' +
           "<li><div><b>Name the teams.</b><span class=\"muted\">Each decision goes to the next team in turn. One student per team comes up to choose.</span></div></li>" +
-          "<li><div><b>Before the lecture: Eid Ticket Rush.</b><span class=\"muted\">Teams build a ticket system part by part. The blueprint is graded only once every part is in.</span></div></li>" +
+          "<li><div><b>Before the lecture: Eid Ticket Rush.</b><span class=\"muted\">Teams build a ticket system part by part, watch it face sale day, then grade the blueprint.</span></div></li>" +
           "<li><div><b>Teach Lecture 2.</b><span class=\"muted\">Every warm-up answer points to the slides that explain it.</span></div></li>" +
           "<li><div><b>After the lecture: Result Day.</b><span class=\"muted\">Eight harder parts for a result portal, then a live simulation of the class’s design, a mark sheet, and the answers.</span></div></li>" +
         "</ol>" +
@@ -521,30 +522,33 @@
       '<div class="card" style="display:grid;gap:18px;align-content:start">' +
         '<span class="eyebrow">' + esc(Rd.name) + "</span><h1>The blueprint is complete.</h1>" +
         '<p class="lead">Your class picked every part of ' + esc(Rd.blueprint.title) + ". Nobody knows which parts were right yet. " +
-          (warm ? "Time to find out which gut feelings held up." : "Now we see how this design survives result day.") + "</p>" +
+          (warm ? "Now we see how this design survives sale day." : "Now we see how this design survives result day.") + "</p>" +
         '<ul class="parts-list">' + list + "</ul>" +
         '<div class="row"><button class="btn btn-ghost" data-act="undo">' + ICON.undo + "Undo last part</button>" +
-        (warm ? '<button class="btn btn-lg" data-act="start-reveal">Grade the blueprint' + ICON.arrow + "</button>"
-              : '<button class="btn btn-lg" data-act="run-sim">' + ICON.play + "Run Result Day</button>") + "</div>" +
+        '<button class="btn btn-lg" data-act="run-sim">' + ICON.play + (warm ? "Run Sale Day" : "Run Result Day") + "</button></div>" +
       "</div>" +
       blueprintPanel(rid, "done") +
       "</div></section>";
   }
 
   /* ---------- simulation & report ---------- */
-  function simParams() {
-    var r = state.rounds.final, p = {};
-    R("final").questions.forEach(function (q) {
+  function simParams(rid) {
+    var r = state.rounds[rid], p = {};
+    R(rid).questions.forEach(function (q) {
       var pk = r.picks[q.id], o = pk && optionOf(q, pk.opt);
       if (o && o.sim) for (var k in o.sim) p[k] = o.sim[k];
     });
     return p;
   }
 
-  function reportScreenHTML() {
-    var res = ui.simResult || (ui.simResult = SIM.compute(simParams()));
+  function simResultFor(rid) {
+    return ui.simResult[rid] || (ui.simResult[rid] = SIM.compute(simParams(rid), rid));
+  }
+
+  function reportScreenHTML(rid) {
+    var res = simResultFor(rid);
     return '<section class="screen">' +
-      '<div class="row between"><div><span class="eyebrow">Round 2 · Result Day</span><h1 style="font-size:clamp(30px,4vw,46px);font-weight:900">How your design survived</h1></div>' +
+      '<div class="row between"><div><span class="eyebrow">' + esc(R(rid).kicker) + " · " + (rid === "warm" ? "Sale Day" : "Result Day") + '</span><h1 style="font-size:clamp(30px,4vw,46px);font-weight:900">How your design survived</h1></div>' +
       '<div class="row"><button class="btn btn-ghost" data-act="run-sim">' + ICON.play + "Replay the simulation</button>" +
       '<button class="btn btn-lg" data-act="start-reveal">Reveal the answers' + ICON.arrow + "</button></div></div>" +
       SIM.reportHTML(res) + "</section>";
@@ -622,7 +626,7 @@
     Rd.questions.forEach(function (q) { var p = r.picks[q.id], o = p && optionOf(q, p.opt); if (o && o.verdict === "correct") good++; });
     var totals = rid === "final" ? '<p class="muted" style="font-weight:700">Season totals, both rounds: ' + state.teams.map(function (t) { return esc(t.name) + " " + totalScore(t.id); }).join(" · ") + "</p>" : "";
     var actions = rid === "warm"
-      ? '<button class="btn btn-ghost" data-act="home">' + ICON.home + 'Home</button><button class="btn btn-lg" data-act="open-round" data-round="final">After the lecture: Result Day' + ICON.arrow + "</button>"
+      ? '<button class="btn btn-ghost" data-act="home">' + ICON.home + 'Home</button><button class="btn btn-ghost" data-act="show-report">See the Sale Day report</button><button class="btn btn-lg" data-act="open-round" data-round="final">After the lecture: Result Day' + ICON.arrow + "</button>"
       : '<button class="btn btn-ghost" data-act="home">' + ICON.home + 'Home</button><button class="btn btn-ghost" data-act="show-report">See the simulation report</button>';
     return '<section class="screen">' +
       '<div class="card winner-banner">' + ICON.crown.replace('class="crown"', 'class="crown" style="width:56px;height:56px"') + '<span class="eyebrow">' + esc(Rd.kicker) + "</span><h1>" + title + "</h1>" +
@@ -792,8 +796,8 @@
     },
     "reveal-prev": function () { var r = state.rounds[currentRound()]; if (r.revealIdx > 0) { r.revealIdx--; ui.demoTab = null; save(); render(); } },
     "reveal-jump": function (el) { var r = state.rounds[currentRound()], i = Number(el.dataset.i); if (i <= r.revealed) { r.revealIdx = i; ui.demoTab = null; save(); render(); } },
-    "run-sim": function () { state.rounds.final.stage = "sim"; ui.drawer = false; save(); render(); scrollTop(); },
-    "show-report": function () { state.rounds.final.stage = "report"; save(); render(); scrollTop(); },
+    "run-sim": function () { var rid = currentRound(); state.rounds[rid].stage = "sim"; ui.drawer = false; save(); render(); scrollTop(); },
+    "show-report": function () { var rid = currentRound(); state.rounds[rid].stage = "report"; save(); render(); scrollTop(); },
     facts: function () { ui.drawer = !ui.drawer; renderDrawer(); },
     "team-add": function (el) {
       var n = Number(el.dataset.n) || 1;
@@ -815,7 +819,7 @@
       var teams = state.teams;
       state = freshState();
       state.teams = teams;
-      ui.simResult = null; ui.shownScores = {};
+      ui.simResult = {}; ui.shownScores = {};
       save(); render();
       toast("Everything is reset. Team names are kept.");
     },
@@ -823,7 +827,7 @@
       var rid = currentRound();
       if (!arm("replay-" + rid)) return;
       state.rounds[rid] = freshRound();
-      if (rid === "final") ui.simResult = null;
+      delete ui.simResult[rid];
       save(); render(); scrollTop();
       toast(R(rid).name + " is cleared and ready to play again.");
     }
