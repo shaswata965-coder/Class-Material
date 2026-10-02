@@ -202,9 +202,13 @@ window.ResultDaySim = (function () {
         title: "Promise “good on average”: " + (passAvg ? "PASSED" : "FAILED"),
         text: "The average page during the rush took " + fmtLatency(peakAvg) + "." +
           (passAvg && peakP99 > 1 ? " It passed on paper, yet the slowest pages took " + fmtLatency(peakP99) + ": thousands of students waited that long." : "") };
+    } else if (P.req === "day") {
+      req = { status: peakP99 > 1 ? "bad" : "warn",
+        title: "Promise “fast 99% of the day”: PASSED",
+        text: "The 10-minute rush is less than 1% of the day, so it was never counted. In the rush the slowest pages took " + fmtLatency(peakP99) + "." };
     } else if (P.req === "p50normal") {
       req = { status: peakP99 > 1 ? "bad" : "warn",
-        title: "Promise “tested on a quiet day”: PASSED",
+        title: "Promise “proven in a load test”: PASSED",
         text: "At 09:57, with few visitors, pages were quick. In the 10:00 rush the slowest pages took " + fmtLatency(peakP99) +
           ". The test never looked at the moment that mattered." };
     } else {
@@ -222,7 +226,7 @@ window.ResultDaySim = (function () {
     var modL = { strategy: "A+", formula: "B", ifelse: "C", copies: "D" }[P.rules];
     var secScore = 4 - (last.compromised === 0 ? 0 : last.compromised <= 10 ? 1 : 2) - (last.leaked === 0 ? 0 : last.leaked < 1000 ? 1.5 : 2.5);
     var secL = secScore >= 4 ? "A+" : secScore >= 3 ? "B" : secScore >= 2.5 ? "C+" : secScore >= 2 ? "D" : "F";
-    var reqL = { p99peak: "A+", avg: "C", p50normal: "D", fast: "F" }[P.req];
+    var reqL = { p99peak: "A+", avg: "C", day: "D", p50normal: "D", fast: "F" }[P.req];
     var costL = billTotal <= 105000 ? "A+" : billTotal <= 130000 ? "A" : billTotal <= 160000 ? "B+" : billTotal <= 200000 ? "B" : billTotal <= 250000 ? "C" : "D";
 
     var rules = {

@@ -5,12 +5,56 @@
   var C = window.ARENA_CONTENT;
   var SIM = window.ResultDaySim;
   var STORE_KEY = "tradeoff-arena-v1";
-  var SLOTS = [
-    { color: "mango", name: "Mango" },
-    { color: "guava", name: "Guava" },
-    { color: "banana", name: "Banana" },
-    { color: "jamun", name: "Jamun" }
+  /* Team colours: a hand-picked palette first, then generated hues, so any number of teams works. */
+  var PALETTE = [
+    { name: "Mango", c: "#F97316", tint: "#FFEDD5", ink: "#9A3412", on: "#FFFFFF" },
+    { name: "Guava", c: "#4D9A12", tint: "#E5F5D3", ink: "#2F5E0B", on: "#FFFFFF" },
+    { name: "Banana", c: "#E0A800", tint: "#FFF4C2", ink: "#6E5200", on: "#3D2E00" },
+    { name: "Jamun", c: "#9333EA", tint: "#F3E8FF", ink: "#6B21A8", on: "#FFFFFF" },
+    { name: "Lychee", c: "#E11D48", tint: "#FFE4E6", ink: "#9F1239", on: "#FFFFFF" },
+    { name: "Blueberry", c: "#2563EB", tint: "#DBEAFE", ink: "#1E40AF", on: "#FFFFFF" },
+    { name: "Amla", c: "#0D9488", tint: "#CCFBF1", ink: "#115E59", on: "#FFFFFF" },
+    { name: "Coconut", c: "#8B5A2B", tint: "#F3E7DB", ink: "#5C3A1A", on: "#FFFFFF" },
+    { name: "Watermelon", c: "#DB2777", tint: "#FCE7F3", ink: "#9D174D", on: "#FFFFFF" },
+    { name: "Lime", c: "#65A30D", tint: "#ECFCCB", ink: "#3F6212", on: "#FFFFFF" },
+    { name: "Grape", c: "#4338CA", tint: "#E0E7FF", ink: "#312E81", on: "#FFFFFF" },
+    { name: "Jackfruit", c: "#A16207", tint: "#FEF3C7", ink: "#713F12", on: "#FFFFFF" },
+    { name: "Pomelo", c: "#C026D3", tint: "#FAE8FF", ink: "#86198F", on: "#FFFFFF" },
+    { name: "Olive", c: "#57534E", tint: "#F5F5F4", ink: "#292524", on: "#FFFFFF" }
   ];
+  var LEGACY_COLORS = { mango: 0, guava: 1, banana: 2, jamun: 3 };
+  function colorOf(key) {
+    var m = /^p(\d+)$/.exec(key || "");
+    if (m && PALETTE[+m[1]]) return PALETTE[+m[1]];
+    var n = parseInt(String(key).replace(/\D/g, ""), 10) || 0;
+    var h = Math.round((n * 137.508) % 360);
+    return { c: "hsl(" + h + " 62% 42%)", tint: "hsl(" + h + " 80% 93%)", ink: "hsl(" + h + " 65% 24%)", on: "#FFFFFF" };
+  }
+  function nextColorKey() {
+    var used = state.teams.map(function (t) { return t.color; });
+    for (var i = 0; i < PALETTE.length; i++) if (used.indexOf("p" + i) < 0) return "p" + i;
+    var n = PALETTE.length;
+    while (used.indexOf("g" + n) >= 0) n++;
+    return "g" + n;
+  }
+  function defaultTeamName(key) {
+    var m = /^p(\d+)$/.exec(key);
+    return m ? PALETTE[+m[1]].name : "Team " + (state.teams.length + 1);
+  }
+  function applyTeamStyles() {
+    var el = document.getElementById("team-styles");
+    if (!el) { el = document.createElement("style"); el.id = "team-styles"; document.head.appendChild(el); }
+    el.textContent = state.teams.map(function (t) {
+      var c = colorOf(t.color);
+      return ".t-" + t.color + "{--t:" + c.c + ";--t-tint:" + c.tint + ";--t-ink:" + c.ink + ";--t-on:" + c.on + "}";
+    }).join("\n");
+  }
+  function teamHasPicks(id) {
+    return ["warm", "final"].some(function (rid) {
+      var picks = state.rounds[rid].picks;
+      return Object.keys(picks).some(function (k) { return picks[k].team === id; });
+    });
+  }
   var POINTS = { warm: { correct: 10, partial: 5 }, final: { correct: 20, partial: 10 } };
   var TIMER_SECONDS = 60;
 
@@ -22,7 +66,7 @@
   function freshState() {
     return {
       v: 1, screen: "home",
-      teams: SLOTS.slice(0, 3).map(function (s, i) { return { id: "t" + i, name: s.name, color: s.color }; }),
+      teams: [0, 1, 2].map(function (i) { return { id: "t" + i, name: PALETTE[i].name, color: "p" + i }; }),
       rounds: { warm: freshRound(), final: freshRound() }
     };
   }
@@ -32,13 +76,14 @@
       if (!raw) return null;
       var s = JSON.parse(raw);
       if (!s || s.v !== 1 || !Array.isArray(s.teams) || !s.rounds || !s.rounds.warm || !s.rounds.final) return null;
+      s.teams.forEach(function (t) { if (LEGACY_COLORS[t.color] != null) t.color = "p" + LEGACY_COLORS[t.color]; });
       return s;
     } catch (e) { return null; }
   }
   function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* storage unavailable: keep going */ } }
 
   var state = load() || freshState();
-  var ui = { selected: null, locking: false, justPlaced: null, timer: null, timerTick: 0, drawer: false, armed: null, armTimer: 0, sim: null, simResult: null, shownScores: {} };
+  var ui = { selected: null, demo: null, demoTab: null, locking: false, justPlaced: null, timer: null, timerTick: 0, drawer: false, armed: null, armTimer: 0, sim: null, simResult: null, shownScores: {} };
 
   /* ------------------------------------------------------------------ helpers */
   function esc(s) {
@@ -184,7 +229,7 @@
     $top.innerHTML =
       '<button class="brand" data-act="home" aria-label="Trade-off Arena home">' + MARK + "<span>Trade-off Arena<small>CSE 444 · Lecture 2</small></span></button>" +
       '<div class="topbar-mid">' + mid + "</div>" +
-      '<div class="team-chips">' + chips + "</div>" +
+      '<div class="team-chips' + (state.teams.length > 5 ? " compact" : "") + '">' + chips + "</div>" +
       (actions ? '<div class="topbar-actions">' + actions + "</div>" : "");
   }
 
@@ -193,6 +238,7 @@
     var rid = currentRound();
     var stage = rid ? state.rounds[rid].stage : null;
     if (ui.sim && !(rid === "final" && stage === "sim")) { ui.sim.destroy(); ui.sim = null; }
+    applyTeamStyles();
     renderTop();
     renderDrawer();
     if (rid === "final" && stage === "sim" && ui.sim) return;   // keep the running simulation
@@ -209,6 +255,7 @@
     var key = [state.screen, stage, r ? (stage === "play" ? r.q : stage === "reveal" ? r.revealIdx : "") : ""].join("|");
     var settled = key === ui.lastKey;
     ui.lastKey = key;
+    if (ui.demo) { ui.demo.destroy(); ui.demo = null; }
     $app.innerHTML = html;
     if (settled) { var sc = $app.querySelector(".screen"); if (sc) sc.classList.add("settled"); }
     afterRender(rid, stage, settled);
@@ -230,7 +277,18 @@
         setTimeout(function () { confetti(); }, 500);
       }
     }
-    if (stage === "play") updateTimer();
+    if (stage === "play") {
+      updateTimer();
+      var r = state.rounds[rid], q = R(rid).questions[r.q], key = (r.picks[q.id] && r.picks[q.id].opt) || ui.selected;
+      var holder = document.getElementById("demo-stage");
+      if (holder && key) ui.demo = window.ArenaDemos.mount(holder, q.demo, optionOf(q, key).demo, "preview");
+    }
+    if (stage === "reveal") {
+      var rr = state.rounds[rid], qq = R(rid).questions[rr.revealIdx], pk = rr.picks[qq.id];
+      var host = document.getElementById("demo-stage");
+      var tab = ui.demoTab || (pk && pk.opt) || "A";
+      if (host) ui.demo = window.ArenaDemos.mount(host, qq.demo, optionOf(qq, tab).demo, rr.revealIdx < rr.revealed ? "stress" : "preview");
+    }
   }
 
   function scrollTop() { window.scrollTo({ top: 0, behavior: "smooth" }); }
@@ -247,14 +305,13 @@
   }
 
   function homeHTML() {
-    var teamsLocked = anyPicks();
     var rows = state.teams.map(function (t) {
+      var removable = state.teams.length > 2 && !teamHasPicks(t.id);
       return '<div class="team-row t-' + t.color + '">' + avatar(t) +
         '<input id="team-name-' + t.id + '" data-team-name="' + t.id + '" value="' + esc(t.name) + '" maxlength="18" aria-label="Team name" autocomplete="off">' +
-        (state.teams.length > 2 && !teamsLocked ? '<button class="icon-btn" data-act="team-remove" data-team="' + t.id + '" aria-label="Remove ' + esc(t.name) + '">' + ICON.x + "</button>" : "<span></span>") +
+        (removable ? '<button class="icon-btn" data-act="team-remove" data-team="' + t.id + '" aria-label="Remove ' + esc(t.name) + '">' + ICON.x + "</button>" : "<span></span>") +
         "</div>";
     }).join("");
-    var canAdd = state.teams.length < 4 && !teamsLocked;
     var startedFinal = state.rounds.final.stage !== "intro" || Object.keys(state.rounds.final.picks).length;
     var warmDone = state.rounds.warm.stage === "scores";
 
@@ -277,9 +334,11 @@
         roundCard("final", startedFinal ? "Continue Result Day" : warmDone ? "Start Result Day" : "Open Result Day") +
       "</div>" +
       '<div class="home-grid">' +
-        '<div class="card teams-editor"><div class="row between"><h2 style="font-size:26px">Teams</h2><span class="muted">2 to 4 teams, they take turns</span></div>' + rows +
-          '<div class="row">' + (canAdd ? '<button class="btn btn-ghost btn-sm" data-act="team-add">' + ICON.plus + "Add a team</button>" : "") +
-          (teamsLocked ? '<span class="muted" style="font-size:14px">Names can change at any time. To add or remove teams, reset everything first.</span>' : "") + "</div></div>" +
+        '<div class="card teams-editor"><div class="row between"><h2 style="font-size:26px">Teams</h2><span class="team-count">' + state.teams.length + ' teams</span></div>' +
+          '<div class="team-rows' + (state.teams.length > 4 ? " two-col" : "") + '">' + rows + "</div>" +
+          '<div class="row"><button class="btn btn-ghost btn-sm" data-act="team-add">' + ICON.plus + "Add a team</button>" +
+          '<button class="btn btn-ghost btn-sm" data-act="team-add" data-n="5">' + ICON.plus + "Add 5</button>" +
+          '<span class="muted" style="font-size:14px">As many as you like. Teams take turns, one decision each.</span></div></div>' +
         '<div class="card" style="display:grid;gap:18px"><h2 style="font-size:26px">How to run it</h2><ol class="steps">' +
           "<li><div><b>Name the teams.</b><span class=\"muted\">Each decision goes to the next team in turn. One student per team comes up to choose.</span></div></li>" +
           "<li><div><b>Before the lecture: Eid Ticket Rush.</b><span class=\"muted\">Teams build a ticket system part by part. The blueprint is graded only once every part is in.</span></div></li>" +
@@ -348,6 +407,7 @@
     if (opt.selected && t) cls += " selected t-" + t.color;
     if (opt.placed) cls += " placed";
     if (opt.dim) cls += " dim";
+    if (opt.tabOn) cls += " tab-on";
     if (opt.pickedBy) cls += " mine t-" + opt.pickedBy.color;
     var badge = "";
     if (opt.reveal) {
@@ -363,9 +423,10 @@
       '<span class="part-icon">' + I.svg(o.icon) + "</span>" +
       '<span class="part-name">' + esc(o.name) + "</span>" +
       '<span class="part-desc">' + esc(o.text) + "</span>" +
-      (opt.reveal ? '<span class="part-why">' + I.svg(VERDICT_ICON[o.verdict], "ico", 3) + "<span>" + esc(o.why) + "</span></span>" : "");
+      (opt.reveal ? '<span class="part-why">' + I.svg(VERDICT_ICON[o.verdict], "ico", 3) + "<span>" + esc(o.why) + "</span></span>" : "") +
+      (opt.act === "demo-tab" ? '<span class="part-watch">' + I.svg("play") + "</span>" : "");
     if (opt.static) return '<div class="' + cls + '">' + inner + "</div>";
-    return '<button class="' + cls + '" data-act="select" data-key="' + o.key + '"' + (opt.disabled ? " disabled" : "") +
+    return '<button class="' + cls + '" data-act="' + (opt.act || "select") + '" data-key="' + o.key + '"' + (opt.disabled ? " disabled" : "") +
       ' aria-pressed="' + !!opt.selected + '" aria-label="' + esc(o.key + ": " + o.name + ". " + o.text) + '">' + inner + "</button>";
   }
 
@@ -391,6 +452,7 @@
         '<p class="lead">' + esc(Rd.story) + "</p>" +
         factsHTML(rid) +
         '<div class="turn-order"><span class="muted" style="font-weight:700">Turn order:</span>' + orderChips + "</div>" +
+        (state.teams.length > Rd.questions.length ? '<p class="muted" style="font-size:14px">' + state.teams.length + " teams, " + Rd.questions.length + " parts: the teams without a turn here go first " + (rid === "warm" ? "in Result Day." : "next time.") + "</p>" : "") +
         '<p class="muted" style="font-size:14px">Scoring: ' + POINTS[rid].correct + " points for the best part, " + POINTS[rid].partial + " for a half-right part, 0 for the rest.</p>" +
         '<div class="row"><button class="btn btn-lg" data-act="start-round">' + (started ? "Continue building" : "Start building") + ICON.arrow + "</button>" +
         '<button class="btn btn-ghost" data-act="home">' + ICON.back + "Back</button></div>" +
@@ -417,7 +479,7 @@
       (r.order.length ? '<button class="btn btn-ghost btn-sm" data-act="undo"' + (ui.locking ? " disabled" : "") + ">" + ICON.undo + "Undo last part</button>" : "") + "</div>";
     return '<section class="screen q-' + q.quality + '"><div class="play-grid"><div class="play-main">' +
       '<div class="turn-banner t-' + t.color + '">' + avatar(t) +
-        '<div class="who"><b>Team ' + esc(t.name) + ", your turn</b><span>Send one person up to choose the next part.</span></div>" +
+        '<div class="who"><b>Team ' + esc(t.name) + ", your turn</b><span>One person comes up to choose.</span></div>" +
         '<div style="display:grid;justify-items:center;gap:2px"><button class="timer" data-act="timer" aria-label="Start or stop the 60 second timer"></button><span class="timer-label">Timer</span></div>' +
       "</div>" +
       '<article class="card question">' +
@@ -425,7 +487,9 @@
         "<h2>" + esc(q.title) + "</h2>" +
         '<p class="prompt">' + esc(q.prompt) + "</p>" +
         '<div class="parts">' + parts + "</div>" +
-        '<div class="lock-bar"><span class="hint"><span class="kbd">A</span>–<span class="kbd">D</span> to choose, <span class="kbd">Enter</span> to lock it into the blueprint. Answers stay hidden until the blueprint is finished.</span></div>' +
+        '<div class="demo-panel"><div id="demo-stage" class="demo-stage">' +
+          (selOpt ? "" : '<div class="demo-empty">' + I.svg("play") + "<span>Pick a part to see it in action</span></div>") + "</div></div>" +
+        '<div class="lock-bar"><span class="hint"><span class="kbd">A</span>–<span class="kbd">D</span> choose · <span class="kbd">Enter</span> lock in · tap the animation to replay</span></div>' +
       "</article></div>" +
       blueprintPanel(rid, "play", null, footer) +
       "</div></section>";
@@ -492,9 +556,10 @@
     var p = r.picks[q.id], t = (p && team(p.team)) || state.teams[0];
     var shown = i < r.revealed;
     var pts = p ? pointsFor(rid, q, p.opt) : 0;
+    var tab = ui.demoTab || (p && p.opt) || "A", tabOpt = optionOf(q, tab);
     var parts = q.options.map(function (o) {
       var mine = p && p.opt === o.key;
-      return partHTML(rid, q, o, { static: true, reveal: shown, pickedBy: mine ? t : null, pts: pts, dim: !shown && !mine });
+      return partHTML(rid, q, o, { act: shown ? "demo-tab" : null, static: !shown, reveal: shown, pickedBy: mine ? t : null, pts: pts, dim: !shown && !mine, tabOn: shown && o.key === tab });
     }).join("");
 
     var side;
@@ -503,14 +568,20 @@
       var verdictLine = !o ? "" : o.verdict === "correct" ? "Team " + esc(t.name) + " picked the best part: +" + pts :
         o.verdict === "partial" ? "Team " + esc(t.name) + " was half right: +" + pts :
         o.verdict === "trap" ? "Team " + esc(t.name) + " went with the gut feeling: +0" : "Team " + esc(t.name) + ": +0";
-      side = '<aside class="card explain"><span class="eyebrow">Why</span><h3>' + esc(q.reveal.headline) + "</h3><p>" + esc(q.reveal.why) + "</p>" +
-        '<div class="picture"><span class="pic-ico">' + I.svg("bulb") + '</span><div><span class="eyebrow">Picture it</span><p>' + esc(q.reveal.picture) + "</p></div></div>" +
-        '<div class="rule"><span class="eyebrow">Rule to remember</span><b>' + esc(q.reveal.rule) + "</b></div>" +
+      var tabs = q.options.map(function (op) {
+        return '<button class="demo-tab' + (op.key === tab ? " on" : "") + (op.verdict === "correct" ? " best" : "") + '" data-act="demo-tab" data-key="' + op.key + '" title="' + esc(op.name) + '">' +
+          I.svg(op.icon) + "<span>" + op.key + "</span></button>";
+      }).join("");
+      side = '<aside class="card explain"><h3>' + esc(q.reveal.headline) + "</h3>" +
+        '<div class="demo-panel stress"><div class="demo-head"><span class="demo-title">' + I.svg("zap") + "Under pressure: <b>" + esc(tabOpt.name) + '</b></span><div class="demo-tabs">' + tabs + "</div></div>" +
+          '<div id="demo-stage" class="demo-stage"></div></div>' +
+        '<div class="rule"><span class="eyebrow">Rule to remember</span><b>' + esc(q.reveal.rule) + "</b><p>" + esc(q.reveal.why) + "</p></div>" +
         '<div class="row between"><span class="slide-ref">Lecture 2 · ' + esc(q.reveal.slide) + '</span><span class="team-chip t-' + t.color + '">' + avatar(t) + verdictLine + "</span></div></aside>";
     } else {
       var po = p && optionOf(q, p.opt);
-      side = '<aside class="card mystery"><div class="qmark">?</div><h3 style="font-size:26px;font-weight:900">Team ' + esc(t.name) + " chose " + (po ? "“" + esc(po.name) + "”" : "a part") + ".</h3>" +
-        '<p class="muted">Best part, half right, or gut feeling?</p><button class="btn btn-lg btn-quality" data-act="reveal-show">Reveal the answer</button></aside>';
+      side = '<aside class="card mystery"><div class="row" style="justify-content:center"><div class="qmark">?</div></div><h3 style="font-size:26px;font-weight:900">Team ' + esc(t.name) + " chose " + (po ? "“" + esc(po.name) + "”" : "a part") + ".</h3>" +
+        '<div class="demo-panel"><div id="demo-stage" class="demo-stage"></div></div>' +
+        '<p class="muted">Best part, half right, or gut feeling? Press reveal to put it under pressure.</p><button class="btn btn-lg btn-quality" data-act="reveal-show">Reveal the answer</button></aside>';
     }
 
     var last = i === qs.length - 1;
@@ -714,28 +785,31 @@
     "reveal-show": revealShow,
     "reveal-next": function () {
       var rid = currentRound(), r = state.rounds[rid];
+      ui.demoTab = null;
       if (r.revealIdx >= R(rid).questions.length - 1) r.stage = "scores";
       else r.revealIdx++;
       save(); render(); scrollTop();
     },
-    "reveal-prev": function () { var r = state.rounds[currentRound()]; if (r.revealIdx > 0) { r.revealIdx--; save(); render(); } },
-    "reveal-jump": function (el) { var r = state.rounds[currentRound()], i = Number(el.dataset.i); if (i <= r.revealed) { r.revealIdx = i; save(); render(); } },
+    "reveal-prev": function () { var r = state.rounds[currentRound()]; if (r.revealIdx > 0) { r.revealIdx--; ui.demoTab = null; save(); render(); } },
+    "reveal-jump": function (el) { var r = state.rounds[currentRound()], i = Number(el.dataset.i); if (i <= r.revealed) { r.revealIdx = i; ui.demoTab = null; save(); render(); } },
     "run-sim": function () { state.rounds.final.stage = "sim"; ui.drawer = false; save(); render(); scrollTop(); },
     "show-report": function () { state.rounds.final.stage = "report"; save(); render(); scrollTop(); },
     facts: function () { ui.drawer = !ui.drawer; renderDrawer(); },
-    "team-add": function () {
-      if (state.teams.length >= 4 || anyPicks()) return;
-      var used = state.teams.map(function (t) { return t.color; });
-      var slot = SLOTS.filter(function (s) { return used.indexOf(s.color) < 0; })[0];
-      var id = "t" + Date.now().toString(36);
-      state.teams.push({ id: id, name: slot.name, color: slot.color });
+    "team-add": function (el) {
+      var n = Number(el.dataset.n) || 1;
+      for (var i = 0; i < n; i++) {
+        var key = nextColorKey();
+        state.teams.push({ id: "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: defaultTeamName(key), color: key });
+      }
       save(); render();
+      if (anyPicks()) toast("New teams join the rotation from the next undecided part.");
     },
     "team-remove": function (el) {
-      if (state.teams.length <= 2 || anyPicks()) return;
+      if (state.teams.length <= 2 || teamHasPicks(el.dataset.team)) return;
       state.teams = state.teams.filter(function (t) { return t.id !== el.dataset.team; });
       save(); render();
     },
+    "demo-tab": function (el) { ui.demoTab = el.dataset.key; render(); },
     "reset-all": function () {
       if (!arm("reset-all")) return;
       var teams = state.teams;
@@ -787,6 +861,8 @@
       if (e.key === "Enter" && ui.selected) { e.preventDefault(); lock(); return; }
     }
     if (r.stage === "reveal") {
+      var tk = { a: "A", b: "B", c: "C", d: "D" }[e.key.toLowerCase()];
+      if (tk && r.revealIdx < r.revealed) { e.preventDefault(); ui.demoTab = tk; render(); return; }
       if (e.key === "ArrowRight" || e.key === " ") {
         e.preventDefault();
         if (r.revealIdx < r.revealed) actions["reveal-next"](); else revealShow();
